@@ -556,6 +556,75 @@ textarea.control {
   margin-top: 12px;
 }
 
+.users-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.users-panel[hidden] {
+  display: none;
+}
+
+.user-list {
+  display: grid;
+  gap: 7px;
+}
+
+.user-list-item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 92px;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-soft);
+}
+
+.user-avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.user-identity {
+  display: grid;
+  min-width: 0;
+}
+
+.user-identity strong,
+.user-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-identity small {
+  margin-top: 2px;
+  color: var(--muted);
+}
+
+.user-role-select {
+  width: 92px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input);
+  color: var(--text);
+}
+
+.permission-note {
+  margin-top: auto;
+  padding-top: 14px;
+}
+
 .splitter {
   position: relative;
   z-index: 5;

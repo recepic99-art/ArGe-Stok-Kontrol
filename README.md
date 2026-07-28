@@ -20,6 +20,8 @@ teknik e-posta kimliğine arka planda dönüştürür.
 
 - Kullanıcı profilleri, listeler, stok kartları ve hareketler Firebase'de ortaktır.
 - Şifreler Firebase Authentication tarafından saklanır.
+- İlk kaydolan kullanıcı yönetici olur. Yöneticiler Kullanıcılar panelinden rol atar.
+- Üyeler mevcut malzemelere giriş/çıkış yapabilir; liste ve stok kartı yönetemez.
 - Tema, açık sekmeler ve panel ölçüleri her tarayıcıda ayrı tutulur.
 - JSON içe/dışa aktarma yedekleme amacıyla kullanılabilir.
 

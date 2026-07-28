@@ -5,7 +5,8 @@ window.DepoSeedState = {
       "id": "u-recep",
       "username": "recep",
       "name": "Recep İç",
-      "authUid": ""
+      "authUid": "",
+      "role": "admin"
     }
   ],
   "tables": [

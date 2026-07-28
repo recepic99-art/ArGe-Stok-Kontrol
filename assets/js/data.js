@@ -27,7 +27,7 @@
     return {
       schemaVersion: 2,
       users: [
-        { id: "u-recep", username: "recep", name: "Recep İç" }
+        { id: "u-recep", username: "recep", name: "Recep İç", role: "admin" }
       ],
       tables: [
         { id: "t-main", name: "Numune Malzemeler Listesi", items: [] }

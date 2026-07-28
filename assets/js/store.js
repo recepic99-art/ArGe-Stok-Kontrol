@@ -67,12 +67,20 @@
     const normalized = clone(value);
 
     normalized.schemaVersion = 3;
-    normalized.users = normalized.users.map(function (user) {
+    const hasAdministrator = normalized.users.some(function (user) {
+      return user.role === "admin";
+    });
+    const firstAuthenticatedIndex = normalized.users.findIndex(function (user) {
+      return Boolean(user.authUid);
+    });
+    const defaultAdministratorIndex = firstAuthenticatedIndex >= 0 ? firstAuthenticatedIndex : 0;
+    normalized.users = normalized.users.map(function (user, index) {
       return {
         id: user.id,
         authUid: user.authUid || "",
         username: user.username,
-        name: user.name
+        name: user.name,
+        role: user.role || (!hasAdministrator && index === defaultAdministratorIndex ? "admin" : "member")
       };
     });
     normalized.session = Object.assign(
@@ -95,6 +103,10 @@
 
   // Oturum, tema ve panel ölçüleri kullanıcıya özeldir; buluta gönderilmez.
   function cloudPayload(state) {
+    const rolesByUid = {};
+    state.users.forEach(function (user) {
+      if (user.authUid) rolesByUid[user.authUid] = user.role || "member";
+    });
     return {
       schemaVersion: 3,
       users: state.users.map(function (user) {
@@ -102,9 +114,11 @@
           id: user.id,
           authUid: user.authUid || "",
           username: user.username,
-          name: user.name
+          name: user.name,
+          role: user.role || "member"
         };
       }),
+      rolesByUid: rolesByUid,
       tables: clone(state.tables),
       logs: clone(state.logs)
     };
@@ -113,7 +127,7 @@
   function mergeCloudWithLocal(cloudState) {
     const defaults = window.DepoData.createInitialState();
     const localUi = readLocalUi();
-    return normalizeState({
+    const merged = normalizeState({
       schemaVersion: 3,
       users: cloudState.users || [],
       tables: cloudState.tables || [],
@@ -121,6 +135,13 @@
       session: Object.assign({}, defaults.session, localUi.session || {}),
       settings: Object.assign({}, defaults.settings, localUi.settings || {})
     });
+    const rolesByUid = cloudState.rolesByUid || {};
+    merged.users.forEach(function (user) {
+      if (user.authUid && rolesByUid[user.authUid]) {
+        user.role = rolesByUid[user.authUid];
+      }
+    });
+    return merged;
   }
 
   function firebaseErrorMessage(error) {
@@ -194,7 +215,8 @@
           id: "user-" + credential.user.uid,
           authUid: credential.user.uid,
           username: username,
-          name: credential.user.displayName || username
+          name: credential.user.displayName || username,
+          role: "member"
         };
         loaded.users.push(user);
       } else if (!user.authUid) {
@@ -226,12 +248,17 @@
         user = {
           id: "user-" + credential.user.uid,
           username: username,
-          name: name
+          name: name,
+          role: "member"
         };
         loaded.users.push(user);
       }
       user.authUid = credential.user.uid;
       user.name = name;
+      const hasAuthenticatedAdministrator = loaded.users.some(function (entry) {
+        return entry.id !== user.id && entry.authUid && entry.role === "admin";
+      });
+      if (!hasAuthenticatedAdministrator) user.role = "admin";
       loaded.session.currentUserId = user.id;
       save(loaded);
       return loaded;

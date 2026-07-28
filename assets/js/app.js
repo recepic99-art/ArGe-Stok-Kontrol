@@ -6,6 +6,7 @@
   // Yalnızca o anki ekranda gereken geçici bilgiler ana JSON dosyasına yazılmaz.
   const ui = {
     authMode: "login",
+    leftTab: "lists",
     rightTab: "stock-card",
     activeItemId: null,
     formMode: "existing",
@@ -100,6 +101,17 @@
     return state.users.find(function (user) {
       return user.id === state.session.currentUserId;
     }) || null;
+  }
+
+  function currentUserIsAdmin() {
+    const user = currentUser();
+    return Boolean(user && user.role === "admin");
+  }
+
+  function requireAdministrator() {
+    if (currentUserIsAdmin()) return true;
+    showToast("Bu işlem yalnızca yöneticiler tarafından yapılabilir.", true);
+    return false;
   }
 
   function tableById(tableId) {
@@ -262,6 +274,7 @@
     ensureValidSession();
     renderHeader();
     renderListsPanel();
+    renderUsersPanel();
     renderOpenTableTabs();
     renderStockTable();
     syncStockForm(Boolean(forceForm));
@@ -276,7 +289,9 @@
     const fileName = window.DepoStore.fileName() || "JSON bağlı değil";
     const context = fileName + (active ? " / " + active.table.name : "");
     $("header-context").textContent = context;
-    $("current-user-button").textContent = user ? user.name : "Kullanıcı";
+    $("current-user-button").textContent = user
+      ? user.name + (user.role === "admin" ? " · Yönetici" : " · Üye")
+      : "Kullanıcı";
     updateFileStatus();
   }
 
@@ -289,6 +304,55 @@
         '<span>' + escapeHtml(table.name) + '</span>' +
         '<small class="table-count">' + table.items.length + '</small></button>';
     }).join("");
+  }
+
+  function setLeftTab(tab) {
+    ui.leftTab = tab;
+    document.querySelectorAll("[data-left-tab]").forEach(function (button) {
+      button.classList.toggle("is-active", button.dataset.leftTab === tab);
+    });
+    $("lists-panel").hidden = tab !== "lists";
+    $("users-panel").hidden = tab !== "users";
+  }
+
+  function renderUsersPanel() {
+    const signedUpUsers = state.users.filter(function (user) {
+      return Boolean(user.authUid);
+    });
+    const mayManage = currentUserIsAdmin();
+    $("users-summary").textContent = signedUpUsers.length + " kayıtlı kullanıcı";
+    $("user-list").innerHTML = signedUpUsers.map(function (user) {
+      const isCurrent = user.id === state.session.currentUserId;
+      return '<div class="user-list-item">' +
+        '<span class="user-avatar">' + escapeHtml((user.name || user.username).slice(0, 1).toUpperCase()) + '</span>' +
+        '<span class="user-identity"><strong>' + escapeHtml(user.name || user.username) + '</strong>' +
+        '<small>@' + escapeHtml(user.username) + (isCurrent ? " · Siz" : "") + '</small></span>' +
+        '<select class="user-role-select" data-user-role-id="' + escapeHtml(user.id) + '"' +
+        (mayManage ? "" : " disabled") + ' aria-label="Kullanıcı yetkisi">' +
+        '<option value="member"' + (user.role !== "admin" ? " selected" : "") + '>Üye</option>' +
+        '<option value="admin"' + (user.role === "admin" ? " selected" : "") + '>Yönetici</option>' +
+        '</select></div>';
+    }).join("");
+  }
+
+  function changeUserRole(userId, role) {
+    if (!requireAdministrator()) return;
+    const user = state.users.find(function (entry) { return entry.id === userId; });
+    if (!user || !["admin", "member"].includes(role)) return;
+
+    const administratorCount = state.users.filter(function (entry) {
+      return entry.authUid && entry.role === "admin";
+    }).length;
+    if (user.role === "admin" && role === "member" && administratorCount <= 1) {
+      showToast("Sistemde en az bir yönetici kalmalıdır.", true);
+      renderUsersPanel();
+      return;
+    }
+
+    user.role = role;
+    saveState();
+    renderAll(false);
+    showToast(user.name + " artık " + (role === "admin" ? "yönetici." : "üye."));
   }
 
   function renderOpenTableTabs() {
@@ -545,6 +609,7 @@
   }
 
   function startNewCard() {
+    if (!requireAdministrator()) return;
     const active = activeTableReference();
     if (!active) {
       showToast("Önce bir tablo açın.", true);
@@ -576,6 +641,7 @@
 
   function saveStockCard(event) {
     event.preventDefault();
+    if (!requireAdministrator()) return;
     const active = activeTableReference();
     if (!active) {
       showToast("Önce bir liste açın.", true);
@@ -608,6 +674,7 @@
   }
 
   function deleteSelectedCards() {
+    if (!requireAdministrator()) return;
     const active = activeTableReference();
     if (!active) {
       showToast("Önce bir liste açın.", true);
@@ -720,13 +787,18 @@
 
   function applyPermissionView() {
     const active = activeTableReference();
-    const mayManage = Boolean(active);
+    const isAdministrator = currentUserIsAdmin();
+    const mayManage = Boolean(active && isAdministrator);
     const stockTab = document.querySelector('[data-right-tab="stock-card"]');
     stockTab.hidden = !mayManage;
     if (!mayManage && ui.rightTab === "stock-card") setRightTab("movement");
     document.querySelectorAll('[data-action="new-card"], [data-action="delete-card"]').forEach(function (button) {
       button.disabled = !mayManage;
     });
+    $("new-table-button").disabled = !isAdministrator;
+    $("new-table-wide-button").disabled = !isAdministrator;
+    const importButton = document.querySelector('[data-action="import-json"]');
+    if (importButton) importButton.hidden = !isAdministrator;
   }
 
   // ---------------------------------------------------------------------------
@@ -801,6 +873,7 @@
   }
 
   function createTable() {
+    if (!requireAdministrator()) return;
     openFormModal({
       title: "Yeni liste",
       fields: [
@@ -819,6 +892,7 @@
   }
 
   function openTableContextMenu(tableId, clientX, clientY) {
+    if (!requireAdministrator()) return;
     const menu = $("table-context-menu");
     closeMenus();
     ui.contextTableId = tableId;
@@ -831,6 +905,7 @@
   }
 
   function renameTable(tableId) {
+    if (!requireAdministrator()) return;
     const table = tableById(tableId);
     if (!table) return;
     openFormModal({
@@ -852,6 +927,7 @@
   }
 
   function confirmDeleteTable(tableId) {
+    if (!requireAdministrator()) return;
     const table = tableById(tableId);
     if (!table) return;
     openFormModal({
@@ -890,6 +966,7 @@
   }
 
   function importJsonFile(file) {
+    if (!requireAdministrator()) return;
     const reader = new FileReader();
     reader.onload = function () {
       try {
@@ -1195,7 +1272,9 @@
 
   function handleAction(action) {
     const actions = {
-      "import-json": function () { $("json-file-input").click(); },
+      "import-json": function () {
+        if (requireAdministrator()) $("json-file-input").click();
+      },
       "export-json": exportJson,
       "export-csv": exportActiveTableCsv,
       "open-bom": openBom,
@@ -1298,6 +1377,16 @@
     showToast("Veriler Firebase Realtime Database ile ortak kullanılıyor.");
   });
   $("current-user-button").addEventListener("click", signOut);
+
+  document.querySelectorAll("[data-left-tab]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      setLeftTab(button.dataset.leftTab);
+    });
+  });
+  $("user-list").addEventListener("change", function (event) {
+    const select = event.target.closest("[data-user-role-id]");
+    if (select) changeUserRole(select.dataset.userRoleId, select.value);
+  });
 
   document.querySelectorAll("[data-right-tab]").forEach(function (button) {
     button.addEventListener("click", function () {

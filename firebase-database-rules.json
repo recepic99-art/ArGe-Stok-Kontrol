@@ -2,7 +2,27 @@
   "rules": {
     "appState": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      "schemaVersion": {
+        ".write": "auth != null"
+      },
+      "users": {
+        ".write": "auth != null"
+      },
+      "rolesByUid": {
+        "$uid": {
+          ".write": "root.child('appState/rolesByUid').child(auth.uid).val() === 'admin' || ($uid === auth.uid && !data.exists() && ((!data.parent().exists() && newData.val() === 'admin') || newData.val() === 'member'))",
+          ".validate": "newData.val() === 'admin' || newData.val() === 'member'"
+        }
+      },
+      "tables": {
+        ".write": "auth != null"
+      },
+      "logs": {
+        ".write": "auth != null"
+      },
+      "$other": {
+        ".validate": false
+      }
     }
   }
 }
