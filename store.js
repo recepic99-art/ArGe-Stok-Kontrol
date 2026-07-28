@@ -9,6 +9,7 @@
   let cloudReference = null;
   let stopWatching = null;
   let lastCloudJson = "";
+  let lastRolesByUid = {};
   let writeQueue = Promise.resolve();
 
   function clone(value) {
@@ -154,9 +155,13 @@
       logs: payload.logs
     };
     Object.keys(payload.rolesByUid || {}).forEach(function (uid) {
-      updates["rolesByUid/" + uid] = payload.rolesByUid[uid];
+      if (lastRolesByUid[uid] !== payload.rolesByUid[uid]) {
+        updates["rolesByUid/" + uid] = payload.rolesByUid[uid];
+      }
     });
-    return cloudReference.update(updates);
+    return cloudReference.update(updates).then(function () {
+      lastRolesByUid = clone(payload.rolesByUid || {});
+    });
   }
 
   function firebaseErrorMessage(error) {
@@ -208,6 +213,7 @@
     }
 
     lastCloudJson = JSON.stringify(cloudState);
+    lastRolesByUid = clone(cloudState.rolesByUid || {});
     return mergeCloudWithLocal(cloudState);
   }
 
@@ -299,6 +305,7 @@
       const json = JSON.stringify(cloudState);
       if (json === lastCloudJson) return;
       lastCloudJson = json;
+      lastRolesByUid = clone(cloudState.rolesByUid || {});
       onChange(mergeCloudWithLocal(cloudState));
     });
     stopWatching = function () {
@@ -320,6 +327,8 @@
         return writeCloudPayload(payload);
       })
       .catch(function (error) {
+        // Başarısız kayıt bir sonraki işlemde yeniden denenebilmelidir.
+        lastCloudJson = "";
         window.dispatchEvent(new CustomEvent("depo-file-error", {
           detail: firebaseErrorMessage(error)
         }));
