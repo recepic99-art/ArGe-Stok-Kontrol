@@ -1,44 +1,29 @@
-# Ar-Ge Numune Depo Web Demo
+# Ar-Ge Numune Depo
 
-Bu klasör, v17 masaüstü uygulamasına dokunmadan hazırlanmış yerel web demosudur.
+GitHub Pages üzerinde çalışan ve ortak veriyi Firebase Realtime Database'de
+saklayan stok takip uygulamasıdır.
 
-## Açma
+## Firebase kurulumu
 
-`Web_Demoyu_Baslat.cmd` dosyasına çift tıklayın. Yerel adres Chrome veya Edge'de otomatik açılır.
+1. Firebase Console > Authentication > Sign-in method bölümünde
+   `Email/Password` sağlayıcısını etkinleştirin.
+2. Realtime Database > Rules bölümüne `firebase-database-rules.json`
+   dosyasının içeriğini yapıştırıp Publish düğmesine basın.
+3. İlk kullanıcı giriş ekranındaki Kaydol sekmesinden hesabını oluşturur.
+4. Firebase veritabanı boşsa mevcut 167 malzemelik başlangıç listesi otomatik
+   olarak yüklenir.
 
-İlk ekranda:
+Kullanıcılar e-posta yazmaz. Uygulama, kullanıcı adını Firebase'in istediği
+teknik e-posta kimliğine arka planda dönüştürür.
 
-1. Var olan `.json` dosyasını açın veya `Yeni JSON Oluştur` ile bir dosya oluşturun.
-2. Kullanıcı adı ve şifrenizle giriş yapın.
+## Veri düzeni
 
-Demo hesabı:
+- Kullanıcı profilleri, listeler, stok kartları ve hareketler Firebase'de ortaktır.
+- Şifreler Firebase Authentication tarafından saklanır.
+- Tema, açık sekmeler ve panel ölçüleri her tarayıcıda ayrı tutulur.
+- JSON içe/dışa aktarma yedekleme amacıyla kullanılabilir.
 
-- Kullanıcı adı: `recep`
-- Şifre: `demo123`
+## GitHub Pages
 
-## Veri
-
-- Ana veri kaynağı kullanıcının seçtiği `.json` dosyasıdır.
-- Kullanıcılar, şifreler, listeler, malzemeler, hareketler ve görünüm ayarları bu dosyada tutulur.
-- Yapılan değişiklikler aynı JSON dosyasına otomatik yazılır.
-- Dosya bağlantısı tarayıcı tarafından hatırlanır. Tarayıcı yeniden izin isterse giriş ekranındaki `JSON Dosyası Aç` düğmesine basılır.
-- `Dosya > JSON dışa aktar` ile tam yedek alınabilir.
-- `Dosya > JSON içe aktar` ile alınan yedeğe dönülebilir.
-- Aktif stok tablosu `Dosya > Aktif tabloyu CSV aktar` ile Excel'in açabileceği CSV dosyasına çevrilebilir.
-
-## Demo kapsamı
-
-- Giriş ve kayıt
-- Ortak liste grubu ve birden fazla liste
-- Aynı anda birden fazla liste sekmesi
-- Stok kartı ekleme, düzenleme ve silme
-- Checkbox ile toplu seçim
-- Toplu giriş/çıkış ve hareket geçmişi
-- Kritik stok için kırmızı, yaklaşan stok için sarı satır işareti
-- Yazım hatasına toleranslı arama
-- Sütun görünürlüğü, sıralama ve sürükleyerek sütun taşıma
-- Aydınlık ve karanlık tema
-- JSON yedek, CSV aktarım ve temel BOM CSV/TXT işlemi
-- Kaydedilen panel boyutları
-
-Bu sürümde gerçek sunucu veya merkezi veritabanı yoktur. Aynı JSON dosyasını ağ klasöründen iki kişi aynı anda açarsa son kaydeden kişinin verisi diğer değişikliği ezebilir.
+Depo ayarlarında Settings > Pages > Deploy from a branch seçin. `main` dalı
+ve `/(root)` klasörüyle yayınlayın.

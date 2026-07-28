@@ -1,16 +1,32 @@
 (function () {
   "use strict";
 
-  const DATABASE_NAME = "arge-numune-depo-web";
-  const STORE_NAME = "file-handles";
-  const HANDLE_KEY = "main-json";
-  const LOCAL_STATE_KEY = "arge-numune-depo-local-state-v2";
-  let fileHandle = null;
-  let localMode = false;
+  const LOCAL_UI_KEY = "arge-numune-depo-ui-v1";
+  const CLOUD_PATH = "appState";
+
+  let database = null;
+  let auth = null;
+  let cloudReference = null;
+  let stopWatching = null;
+  let lastCloudJson = "";
   let writeQueue = Promise.resolve();
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
+  }
+
+  function normalizeUsername(value) {
+    return String(value || "")
+      .toLocaleLowerCase("tr-TR")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/ı/g, "i")
+      .replace(/[^a-z0-9]/g, "");
+  }
+
+  // Firebase Authentication e-posta bekler. Kullanıcı yine yalnızca kullanıcı adı görür.
+  function usernameEmail(username) {
+    return normalizeUsername(username) + "@argestokkontrol.app";
   }
 
   function isValidState(value) {
@@ -18,229 +34,252 @@
       value &&
       Array.isArray(value.users) &&
       Array.isArray(value.tables) &&
-      Array.isArray(value.logs) &&
-      value.session &&
-      value.settings
+      Array.isArray(value.logs)
     );
   }
 
-  // Eski çalışma alanlı JSON yedekleri içe aktarılırsa tablolar tek listeye çevrilir.
-  function migrateOldState(value) {
-    if (!value || !Array.isArray(value.workspaces) || Array.isArray(value.tables)) return value;
-    const tableIds = new Set();
-    const tables = [];
-    value.workspaces.forEach(function (workspace) {
-      (workspace.tables || []).forEach(function (table) {
-        let id = table.id;
-        while (tableIds.has(id)) id = id + "-copy";
-        tableIds.add(id);
-        tables.push(Object.assign({}, table, { id: id }));
-      });
-    });
-    const openTableIds = (value.session && value.session.openTables || [])
-      .map(function (reference) { return reference.tableId; })
-      .filter(function (id, index, list) { return id && list.indexOf(id) === index; });
-    const activeTableId = value.session && value.session.activeTableKey
-      ? String(value.session.activeTableKey).split(":").pop()
-      : (openTableIds[0] || (tables[0] && tables[0].id) || "");
-    return {
-      schemaVersion: 2,
-      users: value.users || [],
-      tables: tables,
-      logs: (value.logs || []).map(function (log) {
-        const copy = Object.assign({}, log);
-        delete copy.workspaceId;
-        return copy;
-      }),
-      session: {
-        currentUserId: value.session && value.session.currentUserId || null,
-        activeTableId: activeTableId,
-        openTableIds: openTableIds.length ? openTableIds : (activeTableId ? [activeTableId] : [])
-      },
-      settings: value.settings || {}
-    };
+  function readLocalUi() {
+    try {
+      return JSON.parse(window.localStorage.getItem(LOCAL_UI_KEY) || "{}");
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function writeLocalUi(state) {
+    try {
+      window.localStorage.setItem(LOCAL_UI_KEY, JSON.stringify({
+        session: state.session,
+        settings: state.settings
+      }));
+    } catch (error) {
+      console.warn("Yerel görünüm ayarları kaydedilemedi.", error);
+    }
   }
 
   function normalizeState(value) {
-    const migrated = migrateOldState(clone(value));
-    if (!isValidState(migrated)) {
-      throw new Error("Dosya geçerli bir Ar-Ge Numune Depo JSON dosyası değil.");
+    if (!isValidState(value)) {
+      throw new Error("Veri geçerli bir Ar-Ge Numune Depo kaydı değil.");
     }
+
     const defaults = window.DepoData.createInitialState();
-    migrated.schemaVersion = 2;
-    migrated.settings = Object.assign({}, defaults.settings, migrated.settings || {});
-    migrated.session = Object.assign({}, defaults.session, migrated.session || {});
-    if (!Array.isArray(migrated.session.openTableIds)) {
-      migrated.session.openTableIds = [];
-    }
-    return migrated;
-  }
+    const localUi = readLocalUi();
+    const normalized = clone(value);
 
-  function supportsFileAccess() {
-    // file:// ile açılışta tarayıcı izinleri tutarsızdır; bu durumda yerel moda geçilir.
-    if (window.location.protocol === "file:") return false;
-    return typeof window.showOpenFilePicker === "function" &&
-      typeof window.showSaveFilePicker === "function";
-  }
-
-  function readLocalState() {
-    try {
-      const saved = window.localStorage.getItem(LOCAL_STATE_KEY);
-      return saved ? normalizeState(JSON.parse(saved)) : window.DepoData.createInitialState();
-    } catch (error) {
-      return window.DepoData.createInitialState();
-    }
-  }
-
-  function writeLocalState(state) {
-    try {
-      window.localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(state));
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  function openHandleDatabase() {
-    return new Promise(function (resolve, reject) {
-      const request = indexedDB.open(DATABASE_NAME, 1);
-      request.onupgradeneeded = function () {
-        if (!request.result.objectStoreNames.contains(STORE_NAME)) {
-          request.result.createObjectStore(STORE_NAME);
-        }
+    normalized.schemaVersion = 3;
+    normalized.users = normalized.users.map(function (user) {
+      return {
+        id: user.id,
+        authUid: user.authUid || "",
+        username: user.username,
+        name: user.name
       };
-      request.onsuccess = function () { resolve(request.result); };
-      request.onerror = function () { reject(request.error); };
     });
-  }
-
-  async function rememberHandle(handle) {
-    try {
-      const database = await openHandleDatabase();
-      await new Promise(function (resolve, reject) {
-        const transaction = database.transaction(STORE_NAME, "readwrite");
-        transaction.objectStore(STORE_NAME).put(handle, HANDLE_KEY);
-        transaction.oncomplete = resolve;
-        transaction.onerror = function () { reject(transaction.error); };
-      });
-      database.close();
-    } catch (error) {
-      console.warn("JSON dosya bağlantısı hatırlanamadı.", error);
+    normalized.session = Object.assign(
+      {},
+      defaults.session,
+      localUi.session || {},
+      normalized.session || {}
+    );
+    normalized.settings = Object.assign(
+      {},
+      defaults.settings,
+      localUi.settings || {},
+      normalized.settings || {}
+    );
+    if (!Array.isArray(normalized.session.openTableIds)) {
+      normalized.session.openTableIds = [];
     }
-  }
-
-  async function rememberedHandle() {
-    try {
-      const database = await openHandleDatabase();
-      const handle = await new Promise(function (resolve, reject) {
-        const request = database.transaction(STORE_NAME, "readonly")
-          .objectStore(STORE_NAME)
-          .get(HANDLE_KEY);
-        request.onsuccess = function () { resolve(request.result || null); };
-        request.onerror = function () { reject(request.error); };
-      });
-      database.close();
-      return handle;
-    } catch (error) {
-      return null;
-    }
-  }
-
-  async function readFromHandle(handle) {
-    const file = await handle.getFile();
-    const text = await file.text();
-    if (!text.trim()) return window.DepoData.createInitialState();
-    return normalizeState(JSON.parse(text));
-  }
-
-  async function writeToHandle(handle, state) {
-    const writable = await handle.createWritable();
-    await writable.write(JSON.stringify(state, null, 2));
-    await writable.close();
-  }
-
-  async function initialize() {
-    if (!supportsFileAccess()) {
-      localMode = true;
-      return readLocalState();
-    }
-    const handle = await rememberedHandle();
-    if (!handle) {
-      localMode = true;
-      return readLocalState();
-    }
-    try {
-      const permission = await handle.queryPermission({ mode: "readwrite" });
-      if (permission !== "granted") {
-        fileHandle = handle;
-        localMode = true;
-        return readLocalState();
-      }
-      fileHandle = handle;
-      return await readFromHandle(handle);
-    } catch (error) {
-      fileHandle = null;
-      localMode = true;
-      return readLocalState();
-    }
-  }
-
-  async function reconnect() {
-    if (!fileHandle) return null;
-    const permission = await fileHandle.requestPermission({ mode: "readwrite" });
-    if (permission !== "granted") return null;
-    return readFromHandle(fileHandle);
-  }
-
-  async function openFile() {
-    if (!supportsFileAccess()) {
-      localMode = true;
-      return readLocalState();
-    }
-    const handles = await window.showOpenFilePicker({
-      multiple: false,
-      types: [{
-        description: "Ar-Ge Numune Depo JSON",
-        accept: { "application/json": [".json"] }
-      }]
-    });
-    fileHandle = handles[0];
-    localMode = false;
-    const loaded = await readFromHandle(fileHandle);
-    await rememberHandle(fileHandle);
-    return loaded;
-  }
-
-  async function createFile(initialState) {
-    if (!supportsFileAccess()) {
-      localMode = true;
-      const normalizedLocalState = normalizeState(initialState);
-      writeLocalState(normalizedLocalState);
-      return normalizedLocalState;
-    }
-    fileHandle = await window.showSaveFilePicker({
-      suggestedName: "arge-numune-depo.json",
-      types: [{
-        description: "Ar-Ge Numune Depo JSON",
-        accept: { "application/json": [".json"] }
-      }]
-    });
-    localMode = false;
-    const normalized = normalizeState(initialState);
-    await writeToHandle(fileHandle, normalized);
-    await rememberHandle(fileHandle);
     return normalized;
   }
 
+  // Oturum, tema ve panel ölçüleri kullanıcıya özeldir; buluta gönderilmez.
+  function cloudPayload(state) {
+    return {
+      schemaVersion: 3,
+      users: state.users.map(function (user) {
+        return {
+          id: user.id,
+          authUid: user.authUid || "",
+          username: user.username,
+          name: user.name
+        };
+      }),
+      tables: clone(state.tables),
+      logs: clone(state.logs)
+    };
+  }
+
+  function mergeCloudWithLocal(cloudState) {
+    const defaults = window.DepoData.createInitialState();
+    const localUi = readLocalUi();
+    return normalizeState({
+      schemaVersion: 3,
+      users: cloudState.users || [],
+      tables: cloudState.tables || [],
+      logs: cloudState.logs || [],
+      session: Object.assign({}, defaults.session, localUi.session || {}),
+      settings: Object.assign({}, defaults.settings, localUi.settings || {})
+    });
+  }
+
+  function firebaseErrorMessage(error) {
+    const code = error && error.code || "";
+    if (code.includes("invalid-credential") || code.includes("wrong-password") ||
+        code.includes("user-not-found")) {
+      return "Kullanıcı adı veya şifre hatalı.";
+    }
+    if (code.includes("email-already-in-use")) {
+      return "Bu kullanıcı adı kullanılıyor. Daha özgün bir ad seçin.";
+    }
+    if (code.includes("weak-password")) {
+      return "Şifre en az 6 karakter olmalıdır.";
+    }
+    if (code.includes("operation-not-allowed")) {
+      return "Firebase'de E-posta/Şifre girişi henüz etkinleştirilmemiş.";
+    }
+    if (code.includes("network-request-failed")) {
+      return "Firebase bağlantısı kurulamadı. İnternet bağlantısını kontrol edin.";
+    }
+    return error && error.message || "Firebase işlemi tamamlanamadı.";
+  }
+
+  function initialize() {
+    if (!window.firebase || !window.DepoFirebaseConfig) {
+      throw new Error("Firebase kitaplığı veya yapılandırması yüklenemedi.");
+    }
+
+    if (!window.firebase.apps.length) {
+      window.firebase.initializeApp(window.DepoFirebaseConfig);
+    }
+    auth = window.firebase.auth();
+    database = window.firebase.database();
+    cloudReference = database.ref(CLOUD_PATH);
+
+    // Giriş yapılmadan bulut verisi okunamaz; ekranda yalnızca yerel görünüm ayarları hazırlanır.
+    return Promise.resolve(normalizeState(window.DepoData.createInitialState()));
+  }
+
+  async function loadCloudState() {
+    const snapshot = await cloudReference.once("value");
+    let cloudState = snapshot.val();
+
+    // İlk kullanıcı ilk kez bağlandığında Excel'den üretilen başlangıç verisi yüklenir.
+    if (!cloudState) {
+      const initialState = window.DepoData.createInitialState();
+      cloudState = cloudPayload(initialState);
+      await cloudReference.set(cloudState);
+    }
+
+    lastCloudJson = JSON.stringify(cloudState);
+    return mergeCloudWithLocal(cloudState);
+  }
+
+  async function signIn(username, password) {
+    try {
+      const credential = await auth.signInWithEmailAndPassword(usernameEmail(username), password);
+      const loaded = await loadCloudState();
+      let user = loaded.users.find(function (entry) {
+        return entry.authUid === credential.user.uid;
+      });
+
+      // Eski JSON'daki kullanıcı ilk Firebase girişinde kimliğiyle eşleştirilir.
+      if (!user) {
+        user = loaded.users.find(function (entry) {
+          return normalizeUsername(entry.username) === normalizeUsername(username);
+        });
+      }
+      if (!user) {
+        user = {
+          id: "user-" + credential.user.uid,
+          authUid: credential.user.uid,
+          username: username,
+          name: credential.user.displayName || username
+        };
+        loaded.users.push(user);
+      } else if (!user.authUid) {
+        user.authUid = credential.user.uid;
+      }
+
+      loaded.session.currentUserId = user.id;
+      save(loaded);
+      return loaded;
+    } catch (error) {
+      throw new Error(firebaseErrorMessage(error));
+    }
+  }
+
+  async function register(username, password, name) {
+    try {
+      const credential = await auth.createUserWithEmailAndPassword(usernameEmail(username), password);
+      await credential.user.updateProfile({ displayName: name });
+      const loaded = await loadCloudState();
+      let user = loaded.users.find(function (entry) {
+        return normalizeUsername(entry.username) === normalizeUsername(username);
+      });
+
+      if (user && user.authUid && user.authUid !== credential.user.uid) {
+        await credential.user.delete();
+        throw new Error("Bu kullanıcı adı kullanılıyor. Daha özgün bir ad seçin.");
+      }
+      if (!user) {
+        user = {
+          id: "user-" + credential.user.uid,
+          username: username,
+          name: name
+        };
+        loaded.users.push(user);
+      }
+      user.authUid = credential.user.uid;
+      user.name = name;
+      loaded.session.currentUserId = user.id;
+      save(loaded);
+      return loaded;
+    } catch (error) {
+      if (error.message && !error.code) throw error;
+      throw new Error(firebaseErrorMessage(error));
+    }
+  }
+
+  async function signOut() {
+    if (stopWatching) {
+      stopWatching();
+      stopWatching = null;
+    }
+    await auth.signOut();
+  }
+
+  function watch(onChange) {
+    if (stopWatching) stopWatching();
+    const listener = cloudReference.on("value", function (snapshot) {
+      const cloudState = snapshot.val();
+      if (!cloudState) return;
+      const json = JSON.stringify(cloudState);
+      if (json === lastCloudJson) return;
+      lastCloudJson = json;
+      onChange(mergeCloudWithLocal(cloudState));
+    });
+    stopWatching = function () {
+      cloudReference.off("value", listener);
+    };
+  }
+
   function save(state) {
-    if (localMode) return writeLocalState(clone(state));
-    if (!fileHandle) return false;
-    const snapshot = clone(state);
+    writeLocalUi(state);
+    if (!auth || !auth.currentUser) return true;
+
+    const payload = cloudPayload(state);
+    const json = JSON.stringify(payload);
+    if (json === lastCloudJson) return true;
+    lastCloudJson = json;
+
     writeQueue = writeQueue
-      .then(function () { return writeToHandle(fileHandle, snapshot); })
+      .then(function () {
+        return cloudReference.set(payload);
+      })
       .catch(function (error) {
         window.dispatchEvent(new CustomEvent("depo-file-error", {
-          detail: error.message || "JSON dosyasına yazılamadı."
+          detail: firebaseErrorMessage(error)
         }));
       });
     return true;
@@ -252,30 +291,18 @@
     return normalized;
   }
 
-  function hasFile() {
-    return localMode || Boolean(fileHandle);
-  }
-
-  function fileName() {
-    if (localMode) return "Tarayıcı verisi (yerel)";
-    return fileHandle ? fileHandle.name : "";
-  }
-
-  function isLocalMode() {
-    return localMode;
-  }
-
   window.DepoStore = {
     clone: clone,
     initialize: initialize,
-    reconnect: reconnect,
-    openFile: openFile,
-    createFile: createFile,
+    signIn: signIn,
+    register: register,
+    signOut: signOut,
+    watch: watch,
     replace: replace,
     save: save,
-    hasFile: hasFile,
-    fileName: fileName,
-    isLocalMode: isLocalMode,
-    supportsFileAccess: supportsFileAccess
+    hasFile: function () { return true; },
+    fileName: function () { return "Firebase ortak veri"; },
+    isLocalMode: function () { return false; },
+    supportsFileAccess: function () { return false; }
   };
 }());

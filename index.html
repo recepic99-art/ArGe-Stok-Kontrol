@@ -25,7 +25,6 @@
         <div id="edit-menu" class="menu-popover" hidden>
           <button data-action="new-card">Yeni stok kartı</button>
           <button data-action="clear-selection">Seçimleri temizle</button>
-          <button data-action="reset-demo">Demo verisini sıfırla</button>
         </div>
       </div>
       <div class="menu-group">
@@ -224,12 +223,8 @@
         <p class="muted">Hesabınızla devam edin</p>
         <div class="json-file-setup">
           <div>
-            <span>JSON veri dosyası</span>
-            <strong id="auth-json-status">Dosya seçilmedi</strong>
-          </div>
-          <div class="json-file-actions">
-            <button id="open-json-file" type="button" class="button button-muted">JSON Dosyası Aç</button>
-            <button id="create-json-file" type="button" class="button button-muted">Yeni JSON Oluştur</button>
+            <span>Ortak veri kaynağı</span>
+            <strong id="auth-json-status">Firebase bağlantısı hazırlanıyor</strong>
           </div>
         </div>
         <div class="auth-tabs">
@@ -244,7 +239,6 @@
           <div id="auth-error" class="inline-error" hidden></div>
           <button id="auth-submit" class="button button-primary auth-submit" type="submit">Giriş Yap</button>
         </form>
-        <p class="demo-credentials">Demo hesabı: <strong>recep</strong> / <strong>demo123</strong></p>
       </div>
     </section>
   </div>
@@ -320,6 +314,10 @@
 
   <script src="assets/js/seed.js"></script>
   <script src="assets/js/data.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
+  <script src="assets/js/firebase-config.js"></script>
   <script src="assets/js/store.js"></script>
   <script src="assets/js/app.js"></script>
 </body>

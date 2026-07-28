@@ -167,7 +167,7 @@
 
   function useLoadedState(loaded) {
     state = loaded;
-    // JSON'da önceki oturum bilgisi bulunsa bile her açılışta tekrar giriş istenir.
+    // Firebase oturumu kalıcı olsa bile uygulama her açılışta tekrar giriş ister.
     state.session.currentUserId = null;
     ui.activeItemId = null;
     ui.checkedIds.clear();
@@ -178,77 +178,39 @@
     $("auth-error").hidden = true;
   }
 
-  async function openJsonDataFile() {
-    try {
-      if (window.DepoStore.isLocalMode() && !window.DepoStore.supportsFileAccess()) {
-        $("json-file-input").click();
-        return;
-      }
-      let loaded = null;
-      if (window.DepoStore.hasFile()) loaded = await window.DepoStore.reconnect();
-      if (!loaded) loaded = await window.DepoStore.openFile();
-      useLoadedState(loaded);
-      showToast("JSON veri dosyası açıldı.");
-    } catch (error) {
-      if (error && error.name === "AbortError") return;
-      showAuthError(error.message || "JSON veri dosyası açılamadı.");
-    }
-  }
-
-  async function createJsonDataFile() {
-    try {
-      const fresh = window.DepoData.createInitialState();
-      fresh.session.currentUserId = null;
-      const loaded = await window.DepoStore.createFile(fresh);
-      useLoadedState(loaded);
-      showToast("Yeni JSON veri dosyası oluşturuldu.");
-    } catch (error) {
-      if (error && error.name === "AbortError") return;
-      showAuthError(error.message || "JSON veri dosyası oluşturulamadı.");
-    }
-  }
-
-  function handleAuthSubmit(event) {
+  async function handleAuthSubmit(event) {
     event.preventDefault();
-    if (!window.DepoStore.hasFile()) {
-      showAuthError("Önce JSON veri dosyasını açın veya yeni bir dosya oluşturun.");
-      return;
-    }
     const username = $("auth-username").value.trim();
     const password = $("auth-password").value;
-    const normalizedUsername = normalizeText(username);
 
     if (!username || !password) {
       showAuthError("Kullanıcı adı ve şifre zorunludur.");
       return;
     }
 
-    if (ui.authMode === "login") {
-      const user = state.users.find(function (entry) {
-        return normalizeText(entry.username) === normalizedUsername && entry.password === password;
-      });
-      if (!user) {
-        showAuthError("Kullanıcı adı veya şifre hatalı.");
-        return;
-      }
-      state.session.currentUserId = user.id;
-    } else {
-      const name = $("auth-name").value.trim();
-      if (!name) {
-        showAuthError("Ad soyad alanı zorunludur.");
-        return;
-      }
-      if (state.users.some(function (entry) { return normalizeText(entry.username) === normalizedUsername; })) {
-        showAuthError("Bu kullanıcı adı kullanılıyor. Daha özgün bir ad seçin.");
-        return;
-      }
-      const user = { id: uid("user"), username: username, name: name, password: password };
-      state.users.push(user);
-      state.session.currentUserId = user.id;
-    }
+    const submitButton = $("auth-submit");
+    submitButton.disabled = true;
+    submitButton.textContent = "Bağlanıyor...";
+    $("auth-error").hidden = true;
 
-    saveState();
-    openApplication();
+    try {
+      if (ui.authMode === "login") {
+        state = await window.DepoStore.signIn(username, password);
+      } else {
+        const name = $("auth-name").value.trim();
+        if (!name) {
+          showAuthError("Ad soyad alanı zorunludur.");
+          return;
+        }
+        state = await window.DepoStore.register(username, password, name);
+      }
+      openApplication();
+    } catch (error) {
+      showAuthError(error.message || "Firebase bağlantısı kurulamadı.");
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = ui.authMode === "register" ? "Hesap Oluştur" : "Giriş Yap";
+    }
   }
 
   function openApplication() {
@@ -257,12 +219,19 @@
     $("app").setAttribute("aria-hidden", "false");
     applySettings();
     renderAll(true);
+    window.DepoStore.watch(function (cloudState) {
+      const currentUserId = state.session.currentUserId;
+      cloudState.session.currentUserId = currentUserId;
+      state = cloudState;
+      ensureValidSession();
+      renderAll(false);
+    });
   }
 
-  function signOut() {
+  async function signOut() {
     if (!window.confirm("Oturumu kapatmak istiyor musunuz?")) return;
+    await window.DepoStore.signOut();
     state.session.currentUserId = null;
-    saveState();
     $("app").setAttribute("aria-hidden", "true");
     $("auth-overlay").hidden = false;
     $("auth-password").value = "";
@@ -1246,19 +1215,6 @@
         renderAll(true);
         showToast("Görünüm yenilendi.");
       },
-      "reset-demo": function () {
-        if (!window.confirm("JSON dosyasındaki veriler silinip örnek veriye dönülsün mü?")) return;
-        const userId = state.session.currentUserId;
-        state = window.DepoData.createInitialState();
-        state.session.currentUserId = state.users.some(function (user) { return user.id === userId; })
-          ? userId : "u-recep";
-        ui.activeItemId = null;
-        ui.checkedIds.clear();
-        ui.formItemId = null;
-        saveState();
-        applySettings();
-        renderAll(true);
-      },
       "theme-light": function () {
         state.settings.theme = "light";
         saveState();
@@ -1338,10 +1294,8 @@
   $("show-password").addEventListener("change", function () {
     $("auth-password").type = this.checked ? "text" : "password";
   });
-  $("open-json-file").addEventListener("click", openJsonDataFile);
-  $("create-json-file").addEventListener("click", createJsonDataFile);
   $("json-file-button").addEventListener("click", function () {
-    showToast(window.DepoStore.fileName() || "JSON veri dosyası bağlı değil.");
+    showToast("Veriler Firebase Realtime Database ile ortak kullanılıyor.");
   });
   $("current-user-button").addEventListener("click", signOut);
 
@@ -1548,18 +1502,19 @@
     if (window.DepoStore.hasFile()) saveState();
   });
   window.addEventListener("depo-file-error", function (event) {
-    showToast(event.detail || "JSON dosyasına yazılamadı.", true);
+    showToast(event.detail || "Firebase ortak verisine yazılamadı.", true);
   });
 
-  // Tarayıcı daha önce seçilen dosyaya hâlâ izin veriyorsa JSON otomatik okunur.
-  const restoredState = await window.DepoStore.initialize();
-  if (restoredState) useLoadedState(restoredState);
-  ensureValidSession();
-  applySettings();
-  updateFileStatus();
-  setAuthMode("login");
-  if (window.DepoStore.isLocalMode()) {
-    $("auth-json-status").textContent = "Tarayıcı verisi (yerel)";
-    showToast("Doğrudan dosya modu: veriler yalnızca bu tarayıcıda saklanır.");
+  try {
+    const restoredState = await window.DepoStore.initialize();
+    if (restoredState) useLoadedState(restoredState);
+    ensureValidSession();
+    applySettings();
+    updateFileStatus();
+    setAuthMode("login");
+    $("auth-json-status").textContent = "Firebase ortak veri";
+  } catch (error) {
+    $("auth-json-status").textContent = "Firebase bağlantı hatası";
+    showAuthError(error.message || "Firebase başlatılamadı.");
   }
 }());
