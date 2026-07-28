@@ -264,6 +264,7 @@
     $("app").classList.toggle("right-collapsed", Boolean(settings.rightCollapsed));
     $("collapse-left").textContent = settings.leftCollapsed ? "›" : "‹";
     $("collapse-right").textContent = settings.rightCollapsed ? "‹" : "›";
+    if (window.DepoDock) window.DepoDock.setTheme(settings.theme);
 
     document.querySelectorAll("[data-theme-check]").forEach(function (check) {
       check.textContent = check.dataset.themeCheck === settings.theme ? "✓" : "";
@@ -311,8 +312,7 @@
     document.querySelectorAll("[data-left-tab]").forEach(function (button) {
       button.classList.toggle("is-active", button.dataset.leftTab === tab);
     });
-    $("lists-panel").hidden = tab !== "lists";
-    $("users-panel").hidden = tab !== "users";
+    if (window.DepoDock) window.DepoDock.showPanel(tab);
   }
 
   function renderUsersPanel() {
@@ -703,8 +703,7 @@
     document.querySelectorAll("[data-right-tab]").forEach(function (button) {
       button.classList.toggle("is-active", button.dataset.rightTab === tab);
     });
-    $("stock-card-panel").hidden = tab !== "stock-card";
-    $("movement-panel").hidden = tab !== "movement";
+    if (window.DepoDock) window.DepoDock.showPanel(tab);
   }
 
   function movementTargetItems() {
@@ -790,7 +789,8 @@
     const isAdministrator = currentUserIsAdmin();
     const mayManage = Boolean(active && isAdministrator);
     const stockTab = document.querySelector('[data-right-tab="stock-card"]');
-    stockTab.hidden = !mayManage;
+    if (stockTab) stockTab.hidden = !isAdministrator;
+    if (window.DepoDock) window.DepoDock.setPanelAllowed("stock-card", isAdministrator);
     if (!mayManage && ui.rightTab === "stock-card") setRightTab("movement");
     document.querySelectorAll('[data-action="new-card"], [data-action="delete-card"]').forEach(function (button) {
       button.disabled = !mayManage;
@@ -1308,6 +1308,14 @@
         renderColumnsModal();
         $("columns-modal").hidden = false;
       },
+      "show-panel-lists": function () { window.DepoDock.showPanel("lists"); },
+      "show-panel-users": function () { window.DepoDock.showPanel("users"); },
+      "show-panel-stock": function () { window.DepoDock.showPanel("stock"); },
+      "show-panel-stock-card": function () {
+        if (currentUserIsAdmin()) window.DepoDock.showPanel("stock-card");
+      },
+      "show-panel-movement": function () { window.DepoDock.showPanel("movement"); },
+      "show-panel-history": function () { window.DepoDock.showPanel("history"); },
       "reset-layout": function () {
         state.settings.leftWidth = 250;
         state.settings.rightWidth = 330;
@@ -1316,6 +1324,7 @@
         state.settings.rightCollapsed = false;
         saveState();
         applySettings();
+        if (window.DepoDock) window.DepoDock.reset();
       },
       "show-about": function () {
         window.alert("Ar-Ge Numune Depo Web Demo\n\nKullanıcılar, listeler ve hareketler seçilen JSON dosyasında tutulur. Gerçek sunucu bağlantısı içermez.");
@@ -1593,6 +1602,8 @@
   window.addEventListener("depo-file-error", function (event) {
     showToast(event.detail || "Firebase ortak verisine yazılamadı.", true);
   });
+
+  window.DepoDock.initialize();
 
   try {
     const restoredState = await window.DepoStore.initialize();

@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  // Firebase ortak veri katmanı - v5.
+  // Firebase ortak veri katmanı - v6.
   const LOCAL_UI_KEY = "arge-numune-depo-ui-v1";
   const CLOUD_PATH = "appState";
 
@@ -11,6 +11,7 @@
   let stopWatching = null;
   let lastCloudJson = "";
   let lastRolesByUid = {};
+  let lastUsersByUid = {};
   let writeQueue = Promise.resolve();
 
   function clone(value) {
@@ -68,7 +69,7 @@
     const localUi = readLocalUi();
     const normalized = clone(value);
 
-    normalized.schemaVersion = 3;
+    normalized.schemaVersion = 4;
     const hasAdministrator = normalized.users.some(function (user) {
       return user.role === "admin";
     });
@@ -103,23 +104,56 @@
     return normalized;
   }
 
+  function userRecord(user) {
+    return {
+      id: user.id,
+      authUid: user.authUid,
+      username: user.username,
+      name: user.name,
+      role: user.role || "member"
+    };
+  }
+
+  function usersFromCloud(cloudState, defaults) {
+    const legacyUsers = clone(defaults.users);
+    const directory = cloudState.userDirectory || {};
+
+    function mergeUser(record) {
+      const existing = legacyUsers.find(function (user) {
+        return user.authUid && user.authUid === record.authUid ||
+          normalizeUsername(user.username) === normalizeUsername(record.username);
+      });
+
+      if (existing) {
+        Object.assign(existing, record);
+      } else {
+        legacyUsers.push(record);
+      }
+    }
+
+    (cloudState.users || []).forEach(function (user) {
+      mergeUser(clone(user));
+    });
+    Object.keys(directory).forEach(function (uid) {
+      mergeUser(Object.assign({}, directory[uid], { authUid: uid }));
+    });
+    return legacyUsers;
+  }
+
   // Oturum, tema ve panel ölçüleri kullanıcıya özeldir; buluta gönderilmez.
+  // Kullanıcılar UID anahtarıyla ayrı tutulur. Böylece eski veriye sahip bir
+  // tarayıcı bütün kullanıcı listesini yanlışlıkla silemez.
   function cloudPayload(state) {
     const rolesByUid = {};
+    const userDirectory = {};
     state.users.forEach(function (user) {
-      if (user.authUid) rolesByUid[user.authUid] = user.role || "member";
+      if (!user.authUid) return;
+      rolesByUid[user.authUid] = user.role || "member";
+      userDirectory[user.authUid] = userRecord(user);
     });
     return {
-      schemaVersion: 3,
-      users: state.users.map(function (user) {
-        return {
-          id: user.id,
-          authUid: user.authUid || "",
-          username: user.username,
-          name: user.name,
-          role: user.role || "member"
-        };
-      }),
+      schemaVersion: 4,
+      userDirectory: userDirectory,
       rolesByUid: rolesByUid,
       tables: clone(state.tables),
       logs: clone(state.logs)
@@ -130,8 +164,8 @@
     const defaults = window.DepoData.createInitialState();
     const localUi = readLocalUi();
     const merged = normalizeState({
-      schemaVersion: 3,
-      users: cloudState.users || [],
+      schemaVersion: 4,
+      users: usersFromCloud(cloudState, defaults),
       tables: cloudState.tables || [],
       logs: cloudState.logs || [],
       session: Object.assign({}, defaults.session, localUi.session || {}),
@@ -151,18 +185,34 @@
   function writeCloudPayload(payload) {
     const updates = {
       schemaVersion: payload.schemaVersion,
-      users: payload.users,
       tables: payload.tables,
       logs: payload.logs
     };
+    Object.keys(payload.userDirectory || {}).forEach(function (uid) {
+      const nextUser = payload.userDirectory[uid];
+      if (JSON.stringify(lastUsersByUid[uid]) !== JSON.stringify(nextUser)) {
+        updates["userDirectory/" + uid] = nextUser;
+      }
+    });
     Object.keys(payload.rolesByUid || {}).forEach(function (uid) {
       if (lastRolesByUid[uid] !== payload.rolesByUid[uid]) {
         updates["rolesByUid/" + uid] = payload.rolesByUid[uid];
       }
     });
     return cloudReference.update(updates).then(function () {
+      lastUsersByUid = clone(payload.userDirectory || {});
       lastRolesByUid = clone(payload.rolesByUid || {});
     });
+  }
+
+  async function writeCurrentUser(user) {
+    if (!user || !user.authUid) return;
+    const updates = {};
+    updates["userDirectory/" + user.authUid] = userRecord(user);
+    updates["rolesByUid/" + user.authUid] = user.role || "member";
+    await cloudReference.update(updates);
+    lastUsersByUid[user.authUid] = clone(userRecord(user));
+    lastRolesByUid[user.authUid] = user.role || "member";
   }
 
   function firebaseErrorMessage(error) {
@@ -214,6 +264,7 @@
     }
 
     lastCloudJson = JSON.stringify(cloudState);
+    lastUsersByUid = clone(cloudState.userDirectory || {});
     lastRolesByUid = clone(cloudState.rolesByUid || {});
     return mergeCloudWithLocal(cloudState);
   }
@@ -246,6 +297,7 @@
       }
 
       loaded.session.currentUserId = user.id;
+      await writeCurrentUser(user);
       save(loaded);
       return loaded;
     } catch (error) {
@@ -277,11 +329,12 @@
       }
       user.authUid = credential.user.uid;
       user.name = name;
-      const hasAuthenticatedAdministrator = loaded.users.some(function (entry) {
-        return entry.id !== user.id && entry.authUid && entry.role === "admin";
+      const hasOtherAdministrator = loaded.users.some(function (entry) {
+        return entry.id !== user.id && entry.role === "admin";
       });
-      if (!hasAuthenticatedAdministrator) user.role = "admin";
+      if (!hasOtherAdministrator) user.role = "admin";
       loaded.session.currentUserId = user.id;
+      await writeCurrentUser(user);
       save(loaded);
       return loaded;
     } catch (error) {
@@ -306,6 +359,7 @@
       const json = JSON.stringify(cloudState);
       if (json === lastCloudJson) return;
       lastCloudJson = json;
+      lastUsersByUid = clone(cloudState.userDirectory || {});
       lastRolesByUid = clone(cloudState.rolesByUid || {});
       onChange(mergeCloudWithLocal(cloudState));
     });

@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>Ar-Ge Numune Depo - Web Demo</title>
-  <link rel="stylesheet" href="assets/css/app.css?v=firebase-4">
+  <link rel="stylesheet" href="assets/vendor/dockview/dockview.css?v=7.0.3">
+  <link rel="stylesheet" href="assets/css/app.css?v=dock-1">
 </head>
 <body>
   <div id="app" class="app-shell" aria-hidden="true">
@@ -34,7 +35,15 @@
           <button data-action="theme-dark"><span class="menu-check" data-theme-check="dark"></span>Karanlık tema</button>
           <div class="menu-separator"></div>
           <button data-action="show-columns">Sütunlar</button>
-          <button data-action="reset-layout">Panel boyutlarını sıfırla</button>
+          <div class="menu-separator"></div>
+          <button data-action="show-panel-lists">Listeler paneli</button>
+          <button data-action="show-panel-users">Kullanıcılar paneli</button>
+          <button data-action="show-panel-stock">Stok listesi paneli</button>
+          <button data-action="show-panel-stock-card">Stok kartı paneli</button>
+          <button data-action="show-panel-movement">Giriş / Çıkış paneli</button>
+          <button data-action="show-panel-history">Hareket geçmişi paneli</button>
+          <div class="menu-separator"></div>
+          <button data-action="reset-layout">Panel düzenini sıfırla</button>
         </div>
       </div>
       <div class="menu-group">
@@ -332,7 +341,9 @@
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
   <script src="assets/js/firebase-config.js?v=firebase-4"></script>
-  <script src="firebase-store-v4.js?v=5"></script>
-  <script src="assets/js/app.js?v=firebase-4"></script>
+  <script src="firebase-store-v4.js?v=6"></script>
+  <script src="assets/vendor/dockview/dockview.min.js?v=7.0.3"></script>
+  <script src="assets/js/dock-layout.js?v=3"></script>
+  <script src="assets/js/app.js?v=dock-1"></script>
 </body>
 </html>

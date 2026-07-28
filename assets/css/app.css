@@ -331,12 +331,82 @@ button {
 }
 
 .workspace-shell {
-  display: grid;
+  display: block;
   min-width: 0;
   min-height: 0;
-  grid-template-columns: minmax(48px, var(--left-width)) 5px minmax(260px, 1fr) 5px minmax(48px, var(--right-width));
   overflow: hidden;
   background: var(--bg);
+}
+
+.dockview-root {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  --dv-tabs-and-actions-container-height: 38px;
+  --dv-tabs-and-actions-container-font-size: 13px;
+  --dv-border-radius: 7px;
+  --dv-drag-over-background-color: color-mix(in srgb, var(--primary) 24%, transparent);
+  --dv-drag-over-border-color: var(--primary);
+}
+
+.dockview-root.dockview-theme-light,
+.dockview-root.dockview-theme-dark {
+  --dv-background-color: var(--bg);
+  --dv-paneview-active-outline-color: var(--primary);
+  --dv-tabs-and-actions-container-background-color: var(--bg);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--surface);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--bg);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--surface);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--bg);
+  --dv-tab-divider-color: var(--border);
+  --dv-activegroup-visiblepanel-tab-color: var(--primary);
+  --dv-activegroup-hiddenpanel-tab-color: var(--muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--text);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--muted);
+  --dv-separator-border: var(--border);
+}
+
+.dockview-root .dv-view-container,
+.dockview-root .dv-content-container,
+.dockview-root .dv-content-container > div {
+  min-width: 0;
+  min-height: 0;
+}
+
+.dockview-root .dv-content-container {
+  background: var(--surface);
+}
+
+.dockview-root .dv-sash-container .dv-sash {
+  z-index: 7;
+}
+
+.dockview-root .dv-tab {
+  letter-spacing: 0;
+}
+
+.dock-panel-body {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+}
+
+#lists-panel.dock-panel-body,
+#users-panel.dock-panel-body {
+  display: flex;
+  flex-direction: column;
+}
+
+#stock-card-panel.dock-panel-body,
+#movement-panel.dock-panel-body {
+  overflow: auto;
+}
+
+.history-dock.dock-panel-body {
+  border: 0;
 }
 
 .dock {
