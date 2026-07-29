@@ -29,6 +29,20 @@
     });
   }
 
+  function normalizeTables(value) {
+    return toArray(value)
+      .filter(function (table) {
+        return table && table.id;
+      })
+      .map(function (table) {
+        const normalized = clone(table);
+        // Firebase boş dizileri saklamaz. Yeni ve henüz boş bir liste buluttan
+        // `items` alanı olmadan dönebileceği için burada tekrar boş dizi veririz.
+        normalized.items = toArray(table.items);
+        return normalized;
+      });
+  }
+
   function normalizeUsername(value) {
     return String(value || "")
       .toLocaleLowerCase("tr-TR")
@@ -81,7 +95,7 @@
     const normalized = clone(value);
 
     normalized.schemaVersion = SCHEMA_VERSION;
-    normalized.users = normalized.users.map(function (user) {
+    normalized.users = toArray(normalized.users).map(function (user) {
       return {
         id: user.id,
         authUid: user.authUid || "",
@@ -90,6 +104,8 @@
         role: user.role === "admin" ? "admin" : "member"
       };
     });
+    normalized.tables = normalizeTables(normalized.tables);
+    normalized.logs = toArray(normalized.logs);
     normalized.session = Object.assign(
       {},
       defaults.session,
@@ -144,7 +160,7 @@
 
     // Eski JSON'dan yalnızca gerçek Firebase UID'si bulunan kayıtları alırız.
     // UID'siz başlangıç kullanıcısı artık yönetici hesabı sayılmaz.
-    (cloudState.users || []).forEach(function (user) {
+    toArray(cloudState.users).forEach(function (user) {
       mergeUser(clone(user));
     });
 
@@ -159,7 +175,7 @@
   function inventoryPayload(state) {
     return {
       schemaVersion: SCHEMA_VERSION,
-      tables: toArray(state.tables),
+      tables: normalizeTables(state.tables),
       logs: toArray(state.logs)
     };
   }
@@ -170,7 +186,7 @@
     const merged = normalizeState({
       schemaVersion: SCHEMA_VERSION,
       users: usersFromCloud(cloudState),
-      tables: toArray(cloudState.tables),
+      tables: normalizeTables(cloudState.tables),
       logs: toArray(cloudState.logs),
       session: Object.assign({}, defaults.session, localUi.session || {}),
       settings: Object.assign({}, defaults.settings, localUi.settings || {})

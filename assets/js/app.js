@@ -309,10 +309,11 @@
     $("lists-summary").textContent = state.tables.length + " liste";
     $("table-list").innerHTML = state.tables.map(function (table) {
       const isActive = state.session.activeTableId === table.id;
+      const itemCount = Array.isArray(table.items) ? table.items.length : 0;
       return '<button class="table-list-item' + (isActive ? " is-active" : "") +
         '" data-table-id="' + escapeHtml(table.id) + '" type="button">' +
         '<span>' + escapeHtml(table.name) + '</span>' +
-        '<small class="table-count">' + table.items.length + '</small></button>';
+        '<small class="table-count">' + itemCount + '</small></button>';
     }).join("");
   }
 
