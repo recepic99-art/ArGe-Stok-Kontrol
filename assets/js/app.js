@@ -84,6 +84,29 @@
     }, 3600);
   }
 
+  function friendlyErrorMessage(error, fallback) {
+    const message = String(error && error.message || "");
+    if (/permission.denied|permission_denied/i.test(message)) {
+      return "Bu işlem için yetkiniz bulunmuyor.";
+    }
+    if (/network|failed to fetch|offline/i.test(message)) {
+      return "Bağlantı kurulamadı. İnternet bağlantısını kontrol edin.";
+    }
+    if (/cannot (read|set)|undefined|null|is not a function/i.test(message)) {
+      return fallback || "Beklenmeyen bir arayüz hatası oluştu.";
+    }
+    // Bilinmeyen İngilizce geliştirici mesajlarını kullanıcıya göstermeyiz.
+    // Türkçe doğrulama mesajları olduğu gibi kalır; diğerleri anlaşılır özete döner.
+    if (message && /[çğıöşüÇĞİÖŞÜ]/.test(message)) return message;
+    return fallback || "İşlem tamamlanamadı.";
+  }
+
+  function isTechnicalError(error) {
+    return /cannot (read|set)|undefined|null|is not a function/i.test(
+      String(error && error.message || "")
+    );
+  }
+
   function downloadFile(name, content, type) {
     const blob = new Blob([content], { type: type });
     const url = URL.createObjectURL(blob);
@@ -160,7 +183,7 @@
     });
     $("auth-name-field").hidden = mode !== "register";
     $("auth-submit").textContent = mode === "register" ? "Hesap Oluştur" : "Giriş Yap";
-    $("auth-password").autocomplete = mode === "register" ? "new-password" : "current-password";
+    $("auth-password").autocomplete = "off";
     $("auth-error").hidden = true;
   }
 
@@ -219,7 +242,7 @@
       }
       openApplication();
     } catch (error) {
-      showAuthError(error.message || "Firebase bağlantısı kurulamadı.");
+      showAuthError(friendlyErrorMessage(error, "Firebase bağlantısı kurulamadı."));
     } finally {
       submitButton.disabled = false;
       submitButton.textContent = ui.authMode === "register" ? "Hesap Oluştur" : "Giriş Yap";
@@ -271,8 +294,10 @@
     document.documentElement.style.setProperty("--history-height", settings.historyHeight + "%");
     $("app").classList.toggle("left-collapsed", Boolean(settings.leftCollapsed));
     $("app").classList.toggle("right-collapsed", Boolean(settings.rightCollapsed));
-    $("collapse-left").textContent = settings.leftCollapsed ? "›" : "‹";
-    $("collapse-right").textContent = settings.rightCollapsed ? "‹" : "›";
+    const collapseLeft = $("collapse-left");
+    const collapseRight = $("collapse-right");
+    if (collapseLeft) collapseLeft.textContent = settings.leftCollapsed ? "›" : "‹";
+    if (collapseRight) collapseRight.textContent = settings.rightCollapsed ? "‹" : "›";
     if (window.DepoDock) window.DepoDock.setTheme(settings.theme);
 
     document.querySelectorAll("[data-theme-check]").forEach(function (check) {
@@ -282,15 +307,25 @@
 
   function renderAll(forceForm) {
     ensureValidSession();
-    renderHeader();
-    renderListsPanel();
-    renderUsersPanel();
-    renderOpenTableTabs();
-    renderStockTable();
-    syncStockForm(Boolean(forceForm));
-    syncMovementForm();
-    renderHistory();
-    applyPermissionView();
+    [
+      ["Üst bilgi", renderHeader],
+      ["Listeler", renderListsPanel],
+      ["Kullanıcılar", renderUsersPanel],
+      ["Açık liste sekmeleri", renderOpenTableTabs],
+      ["Stok tablosu", renderStockTable],
+      ["Stok kartı", function () { syncStockForm(Boolean(forceForm)); }],
+      ["Giriş/çıkış", syncMovementForm],
+      ["Hareket geçmişi", renderHistory],
+      ["Yetkiler", applyPermissionView]
+    ].forEach(function (step) {
+      try {
+        step[1]();
+      } catch (error) {
+        // Dock sürüklenirken bir panel kısa süreliğine DOM dışında kalabilir.
+        // Tek paneldeki çizim hatası uygulamanın kalanını kilitlememelidir.
+        console.error(step[0] + " bölümü güncellenemedi.", error);
+      }
+    });
   }
 
   function renderHeader() {
@@ -360,7 +395,7 @@
     } catch (error) {
       user.role = previousRole;
       renderUsersPanel();
-      showToast(error.message || "Kullanıcı yetkisi değiştirilemedi.", true);
+      showToast(friendlyErrorMessage(error, "Kullanıcı yetkisi değiştirilemedi."), true);
     }
   }
 
@@ -627,7 +662,8 @@
     ui.formMode = "new";
     ui.formItemId = "";
     ui.activeItemId = null;
-    setStockForm(null);
+    // Seri kart girişinde mevcut bilgiler korunur; yalnızca yeni ve benzersiz ID hazırlanır.
+    $("item-id").value = generatedItemId();
     setRightTab("stock-card");
     renderStockTable();
     $("item-name").focus();
@@ -812,8 +848,8 @@
     document.querySelectorAll('[data-action="new-card"], [data-action="delete-card"]').forEach(function (button) {
       button.disabled = !mayManage;
     });
-    $("new-table-button").disabled = !isAdministrator;
-    $("new-table-wide-button").disabled = !isAdministrator;
+    const newTableButton = $("new-table-button");
+    if (newTableButton) newTableButton.disabled = !isAdministrator;
     const importButton = document.querySelector('[data-action="import-json"]');
     if (importButton) importButton.hidden = !isAdministrator;
   }
@@ -870,7 +906,7 @@
     $("form-modal-error").hidden = true;
     $("form-modal-fields").innerHTML = fields.map(function (field) {
       return '<label>' + escapeHtml(field.label) +
-        '<input class="control" name="' + escapeHtml(field.name) + '" value="' +
+        '<input class="control" autocomplete="off" name="' + escapeHtml(field.name) + '" value="' +
         escapeHtml(field.value || "") + '"' + (field.required ? " required" : "") + "></label>";
     }).join("");
     ui.formModalSubmit = options.onSubmit;
@@ -1030,7 +1066,7 @@
           }
         });
       } catch (error) {
-        showToast(error.message || "JSON dosyası okunamadı.", true);
+        showToast(friendlyErrorMessage(error, "JSON dosyası okunamadı."), true);
       }
     };
     reader.readAsText(file, "utf-8");
@@ -1446,7 +1482,6 @@
   });
 
   $("new-table-button").addEventListener("click", createTable);
-  $("new-table-wide-button").addEventListener("click", createTable);
 
   $("table-list").addEventListener("click", function (event) {
     const button = event.target.closest("[data-table-id]");
@@ -1570,7 +1605,12 @@
       const shouldClose = await Promise.resolve(ui.formModalSubmit(values));
       if (shouldClose !== false) closeFormModal();
     } catch (error) {
-      showFormModalError(error.message || "İşlem tamamlanamadı.");
+      if (isTechnicalError(error)) {
+        closeFormModal();
+        showToast(friendlyErrorMessage(error, "Arayüz güncellenirken bir hata oluştu."), true);
+      } else {
+        showFormModalError(friendlyErrorMessage(error, "İşlem tamamlanamadı."));
+      }
     } finally {
       if (!$("form-modal").hidden) {
         ui.formModalBusy = false;
@@ -1665,6 +1705,6 @@
     $("auth-json-status").textContent = "Firebase ortak veri";
   } catch (error) {
     $("auth-json-status").textContent = "Firebase bağlantı hatası";
-    showAuthError(error.message || "Firebase başlatılamadı.");
+    showAuthError(friendlyErrorMessage(error, "Firebase başlatılamadı."));
   }
 }());

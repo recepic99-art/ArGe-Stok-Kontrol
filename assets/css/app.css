@@ -667,12 +667,6 @@ textarea.control {
   font-size: 11px;
 }
 
-.panel-footer-actions {
-  display: grid;
-  gap: 7px;
-  margin-top: 12px;
-}
-
 .users-panel {
   display: flex;
   flex-direction: column;

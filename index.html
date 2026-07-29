@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title>Ar-Ge Numune Depo - Web Demo</title>
   <link rel="stylesheet" href="assets/vendor/dockview/dockview.css?v=7.0.3">
-  <link rel="stylesheet" href="assets/css/app.css?v=bugfix-9">
+  <link rel="stylesheet" href="assets/css/app.css?v=bugfix-10">
 </head>
 <body>
   <div id="app" class="app-shell" aria-hidden="true">
@@ -88,9 +88,6 @@
             <button id="new-table-button" class="icon-button" title="Yeni tablo" aria-label="Yeni tablo">+</button>
           </div>
           <div id="table-list" class="table-list" role="list"></div>
-          <div class="panel-footer-actions">
-            <button id="new-table-wide-button" class="button button-primary">Yeni Liste</button>
-          </div>
         </section>
 
         <section id="users-panel" class="dock-content users-panel" hidden>
@@ -145,14 +142,14 @@
             <button id="collapse-right" class="icon-button dock-collapse" title="Sağ paneli daralt" aria-label="Sağ paneli daralt">›</button>
           </div>
 
-          <form id="stock-card-panel" class="dock-content form-panel">
+          <form id="stock-card-panel" class="dock-content form-panel" autocomplete="off">
             <div class="section-heading"><h2>Stok Kartı</h2></div>
             <div class="form-grid">
               <label>ID<input id="item-id" class="control" readonly></label>
-              <label>Malzeme Adı<input id="item-name" class="control" required></label>
-              <label>Cins/Kategori<input id="item-category" class="control"></label>
-              <label>Kılıf<input id="item-footprint" class="control" placeholder="0603, 0805, SOT23"></label>
-              <label>Kutu<input id="item-box" class="control"></label>
+              <label>Malzeme Adı<input id="item-name" class="control" autocomplete="off" required></label>
+              <label>Cins/Kategori<input id="item-category" class="control" autocomplete="off"></label>
+              <label>Kılıf<input id="item-footprint" class="control" autocomplete="off" placeholder="0603, 0805, SOT23"></label>
+              <label>Kutu<input id="item-box" class="control" autocomplete="off"></label>
               <label>Miktar<input id="item-quantity" class="control" type="number" min="0" step="0.01"></label>
               <label>Birim
                 <select id="item-unit" class="control">
@@ -163,7 +160,7 @@
                 </select>
               </label>
               <label>Kritik Seviye<input id="item-critical" class="control" type="number" min="0" step="0.01"></label>
-              <label class="form-span">Açıklama<textarea id="item-description" class="control" rows="2"></textarea></label>
+              <label class="form-span">Açıklama<textarea id="item-description" class="control" autocomplete="off" rows="2"></textarea></label>
             </div>
             <div class="form-actions">
               <button type="button" class="button button-muted" data-action="new-card">Yeni Kart</button>
@@ -172,7 +169,7 @@
             </div>
           </form>
 
-          <form id="movement-panel" class="dock-content form-panel" hidden>
+          <form id="movement-panel" class="dock-content form-panel" autocomplete="off" hidden>
             <div class="section-heading"><h2>Giriş / Çıkış</h2></div>
             <div class="movement-form">
               <span>Seçili malzeme</span>
@@ -185,11 +182,11 @@
               <label for="movement-quantity">Miktar</label>
               <input id="movement-quantity" class="control" type="number" value="1" min="0.01" step="0.01">
               <label id="movement-purpose-label" for="movement-purpose">Kullanım amacı/proje</label>
-              <input id="movement-purpose" class="control">
+              <input id="movement-purpose" class="control" autocomplete="off">
               <span>Alan/Veren</span>
               <strong id="movement-user"></strong>
               <label for="movement-note">Açıklama</label>
-              <input id="movement-note" class="control">
+              <input id="movement-note" class="control" autocomplete="off">
             </div>
             <button type="submit" class="button button-primary movement-submit">Hareketi İşle</button>
           </form>
@@ -254,10 +251,10 @@
           <button class="auth-tab is-active" data-auth-mode="login">Giriş Yap</button>
           <button class="auth-tab" data-auth-mode="register">Kaydol</button>
         </div>
-        <form id="auth-form">
-          <label id="auth-name-field" hidden>Ad Soyad<input id="auth-name" class="control" autocomplete="name"></label>
-          <label>Kullanıcı adı<input id="auth-username" class="control" autocomplete="username" value="recep"></label>
-          <label>Şifre<input id="auth-password" class="control" type="password" autocomplete="current-password" value="demo123"></label>
+        <form id="auth-form" autocomplete="off">
+          <label id="auth-name-field" hidden>Ad Soyad<input id="auth-name" class="control" autocomplete="off"></label>
+          <label>Kullanıcı adı<input id="auth-username" class="control" autocomplete="off"></label>
+          <label>Şifre<input id="auth-password" class="control" type="password" autocomplete="off"></label>
           <label class="check-label"><input id="show-password" type="checkbox"> Şifreyi göster</label>
           <div id="auth-error" class="inline-error" hidden></div>
           <button id="auth-submit" class="button button-primary auth-submit" type="submit">Giriş Yap</button>
@@ -344,6 +341,6 @@
   <script src="firebase-store-v4.js?v=10"></script>
   <script src="assets/vendor/dockview/dockview.min.js?v=7.0.3"></script>
   <script src="assets/js/dock-layout.js?v=6"></script>
-  <script src="assets/js/app.js?v=bugfix-12"></script>
+  <script src="assets/js/app.js?v=bugfix-13"></script>
 </body>
 </html>
