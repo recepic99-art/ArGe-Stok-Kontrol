@@ -335,24 +335,23 @@
     }).join("");
   }
 
-  function changeUserRole(userId, role) {
+  async function changeUserRole(userId, role) {
     if (!requireAdministrator()) return;
     const user = state.users.find(function (entry) { return entry.id === userId; });
     if (!user || !["admin", "member"].includes(role)) return;
 
-    const administratorCount = state.users.filter(function (entry) {
-      return entry.authUid && entry.role === "admin";
-    }).length;
-    if (user.role === "admin" && role === "member" && administratorCount <= 1) {
-      showToast("Sistemde en az bir yönetici kalmalıdır.", true);
-      renderUsersPanel();
-      return;
-    }
-
+    const previousRole = user.role;
     user.role = role;
-    saveState();
-    renderAll(false);
-    showToast(user.name + " artık " + (role === "admin" ? "yönetici." : "üye."));
+    renderUsersPanel();
+
+    try {
+      await window.DepoStore.setUserRole(userId, role);
+      showToast(user.name + " artık " + (role === "admin" ? "yönetici." : "üye."));
+    } catch (error) {
+      user.role = previousRole;
+      renderUsersPanel();
+      showToast(error.message || "Kullanıcı yetkisi değiştirilemedi.", true);
+    }
   }
 
   function renderOpenTableTabs() {

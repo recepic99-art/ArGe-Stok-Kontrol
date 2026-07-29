@@ -1,17 +1,18 @@
 (function () {
   "use strict";
 
-  // Firebase ortak veri katmanı - v6.
+  // Firebase ortak veri katmanı - v7.
   const LOCAL_UI_KEY = "arge-numune-depo-ui-v1";
   const CLOUD_PATH = "appState";
+  const SCHEMA_VERSION = 5;
 
   let database = null;
   let auth = null;
   let cloudReference = null;
+  let usersReference = null;
+  let rolesReference = null;
   let stopWatching = null;
-  let lastCloudJson = "";
-  let lastRolesByUid = {};
-  let lastUsersByUid = {};
+  let lastInventoryJson = "";
   let writeQueue = Promise.resolve();
 
   function clone(value) {
@@ -69,21 +70,14 @@
     const localUi = readLocalUi();
     const normalized = clone(value);
 
-    normalized.schemaVersion = 4;
-    const hasAdministrator = normalized.users.some(function (user) {
-      return user.role === "admin";
-    });
-    const firstAuthenticatedIndex = normalized.users.findIndex(function (user) {
-      return Boolean(user.authUid);
-    });
-    const defaultAdministratorIndex = firstAuthenticatedIndex >= 0 ? firstAuthenticatedIndex : 0;
-    normalized.users = normalized.users.map(function (user, index) {
+    normalized.schemaVersion = SCHEMA_VERSION;
+    normalized.users = normalized.users.map(function (user) {
       return {
         id: user.id,
         authUid: user.authUid || "",
         username: user.username,
         name: user.name,
-        role: user.role || (!hasAdministrator && index === defaultAdministratorIndex ? "admin" : "member")
+        role: user.role === "admin" ? "admin" : "member"
       };
     });
     normalized.session = Object.assign(
@@ -104,57 +98,57 @@
     return normalized;
   }
 
+  // Kullanıcı profili ile yetki ayrı tutulur. Yetkinin iki yerde saklanması,
+  // eski tarayıcıların güncel rolü yanlışlıkla ezmesine neden oluyordu.
   function userRecord(user) {
     return {
       id: user.id,
       authUid: user.authUid,
       username: user.username,
-      name: user.name,
-      role: user.role || "member"
+      name: user.name
     };
   }
 
-  function usersFromCloud(cloudState, defaults) {
-    const legacyUsers = clone(defaults.users);
+  function usersFromCloud(cloudState) {
+    const users = [];
     const directory = cloudState.userDirectory || {};
+    const roles = cloudState.rolesByUid || {};
 
     function mergeUser(record) {
-      const existing = legacyUsers.find(function (user) {
-        return user.authUid && user.authUid === record.authUid ||
-          normalizeUsername(user.username) === normalizeUsername(record.username);
+      if (!record || !record.authUid) return;
+      const existing = users.find(function (user) {
+        return user.authUid === record.authUid;
       });
 
       if (existing) {
         Object.assign(existing, record);
       } else {
-        legacyUsers.push(record);
+        users.push(record);
       }
     }
 
-    (cloudState.users || []).forEach(function (user) {
-      mergeUser(clone(user));
-    });
+    // Yeni yapıda UID anahtarlı kullanıcı dizini tek gerçek kaynaktır.
     Object.keys(directory).forEach(function (uid) {
       mergeUser(Object.assign({}, directory[uid], { authUid: uid }));
     });
-    return legacyUsers;
+
+    // Eski JSON'dan yalnızca gerçek Firebase UID'si bulunan kayıtları alırız.
+    // UID'siz başlangıç kullanıcısı artık yönetici hesabı sayılmaz.
+    (cloudState.users || []).forEach(function (user) {
+      mergeUser(clone(user));
+    });
+
+    users.forEach(function (user) {
+      user.role = roles[user.authUid] === "admin" ? "admin" : "member";
+    });
+    return users;
   }
 
-  // Oturum, tema ve panel ölçüleri kullanıcıya özeldir; buluta gönderilmez.
-  // Kullanıcılar UID anahtarıyla ayrı tutulur. Böylece eski veriye sahip bir
-  // tarayıcı bütün kullanıcı listesini yanlışlıkla silemez.
-  function cloudPayload(state) {
-    const rolesByUid = {};
-    const userDirectory = {};
-    state.users.forEach(function (user) {
-      if (!user.authUid) return;
-      rolesByUid[user.authUid] = user.role || "member";
-      userDirectory[user.authUid] = userRecord(user);
-    });
+  // Normal kaydetme yalnızca stok ve hareket verisini yazar. Kullanıcı ve rol
+  // kayıtları kendi küçük fonksiyonlarıyla güncellenir.
+  function inventoryPayload(state) {
     return {
-      schemaVersion: 4,
-      userDirectory: userDirectory,
-      rolesByUid: rolesByUid,
+      schemaVersion: SCHEMA_VERSION,
       tables: clone(state.tables),
       logs: clone(state.logs)
     };
@@ -164,55 +158,50 @@
     const defaults = window.DepoData.createInitialState();
     const localUi = readLocalUi();
     const merged = normalizeState({
-      schemaVersion: 4,
-      users: usersFromCloud(cloudState, defaults),
+      schemaVersion: SCHEMA_VERSION,
+      users: usersFromCloud(cloudState),
       tables: cloudState.tables || [],
       logs: cloudState.logs || [],
       session: Object.assign({}, defaults.session, localUi.session || {}),
       settings: Object.assign({}, defaults.settings, localUi.settings || {})
     });
-    const rolesByUid = cloudState.rolesByUid || {};
-    merged.users.forEach(function (user) {
-      if (user.authUid && rolesByUid[user.authUid]) {
-        user.role = rolesByUid[user.authUid];
-      }
-    });
     return merged;
   }
 
-  // Ayrıntılı Firebase kuralları nedeniyle ana düğümü tek parça yazmak yerine
-  // her veri bölümünü kendi izin yolundan güncelleriz.
-  function writeCloudPayload(payload) {
-    const updates = {
-      schemaVersion: payload.schemaVersion,
-      tables: payload.tables,
-      logs: payload.logs
-    };
-    Object.keys(payload.userDirectory || {}).forEach(function (uid) {
-      const nextUser = payload.userDirectory[uid];
-      if (JSON.stringify(lastUsersByUid[uid]) !== JSON.stringify(nextUser)) {
-        updates["userDirectory/" + uid] = nextUser;
-      }
-    });
-    Object.keys(payload.rolesByUid || {}).forEach(function (uid) {
-      if (lastRolesByUid[uid] !== payload.rolesByUid[uid]) {
-        updates["rolesByUid/" + uid] = payload.rolesByUid[uid];
-      }
-    });
-    return cloudReference.update(updates).then(function () {
-      lastUsersByUid = clone(payload.userDirectory || {});
-      lastRolesByUid = clone(payload.rolesByUid || {});
-    });
+  function writeInventory(payload) {
+    return cloudReference.update(payload);
   }
 
   async function writeCurrentUser(user) {
     if (!user || !user.authUid) return;
-    const updates = {};
-    updates["userDirectory/" + user.authUid] = userRecord(user);
-    updates["rolesByUid/" + user.authUid] = user.role || "member";
-    await cloudReference.update(updates);
-    lastUsersByUid[user.authUid] = clone(userRecord(user));
-    lastRolesByUid[user.authUid] = user.role || "member";
+    await usersReference.child(user.authUid).set(userRecord(user));
+  }
+
+  // İlk gerçek hesap yönetici olur; sonraki hesaplar üye olarak eklenir.
+  // İşlem tüm rol listesi üzerinde transaction olduğu için iki kişi aynı anda
+  // kaydolsa bile yalnızca biri ilk yönetici olabilir.
+  async function ensureCurrentUserRole(uid) {
+    const userRoleReference = rolesReference.child(uid);
+    const currentRoleSnapshot = await userRoleReference.once("value");
+    const currentRole = currentRoleSnapshot.val();
+
+    if (currentRole === "admin" || currentRole === "member") {
+      return currentRole;
+    }
+
+    // Rol listesinin tamamını yazmak diğer kullanıcıların yetkilerini silebilirdi.
+    // Önce yönetici var mı diye bakıp yalnızca giriş yapan kişinin rolünü oluştururuz.
+    const rolesSnapshot = await rolesReference.once("value");
+    const roles = rolesSnapshot.val() || {};
+    const hasAdministrator = Object.keys(roles).some(function (key) {
+      return roles[key] === "admin";
+    });
+    const firstRole = hasAdministrator ? "member" : "admin";
+    const result = await userRoleReference.transaction(function (role) {
+      return role === "admin" || role === "member" ? role : firstRole;
+    });
+    const savedRole = result.snapshot.val();
+    return savedRole === "admin" ? "admin" : "member";
   }
 
   function firebaseErrorMessage(error) {
@@ -247,6 +236,8 @@
     auth = window.firebase.auth();
     database = window.firebase.database();
     cloudReference = database.ref(CLOUD_PATH);
+    usersReference = cloudReference.child("userDirectory");
+    rolesReference = cloudReference.child("rolesByUid");
 
     // Giriş yapılmadan bulut verisi okunamaz; ekranda yalnızca yerel görünüm ayarları hazırlanır.
     return Promise.resolve(normalizeState(window.DepoData.createInitialState()));
@@ -259,13 +250,14 @@
     // İlk kullanıcı ilk kez bağlandığında Excel'den üretilen başlangıç verisi yüklenir.
     if (!cloudState) {
       const initialState = window.DepoData.createInitialState();
-      cloudState = cloudPayload(initialState);
-      await writeCloudPayload(cloudState);
+      cloudState = inventoryPayload(initialState);
+      await writeInventory(cloudState);
     }
 
-    lastCloudJson = JSON.stringify(cloudState);
-    lastUsersByUid = clone(cloudState.userDirectory || {});
-    lastRolesByUid = clone(cloudState.rolesByUid || {});
+    lastInventoryJson = JSON.stringify(inventoryPayload({
+      tables: cloudState.tables || [],
+      logs: cloudState.logs || []
+    }));
     return mergeCloudWithLocal(cloudState);
   }
 
@@ -292,13 +284,12 @@
           role: "member"
         };
         loaded.users.push(user);
-      } else if (!user.authUid) {
-        user.authUid = credential.user.uid;
       }
 
+      user.role = await ensureCurrentUserRole(credential.user.uid);
       loaded.session.currentUserId = user.id;
       await writeCurrentUser(user);
-      save(loaded);
+      writeLocalUi(loaded);
       return loaded;
     } catch (error) {
       throw new Error(firebaseErrorMessage(error));
@@ -329,13 +320,10 @@
       }
       user.authUid = credential.user.uid;
       user.name = name;
-      const hasOtherAdministrator = loaded.users.some(function (entry) {
-        return entry.id !== user.id && entry.role === "admin";
-      });
-      if (!hasOtherAdministrator) user.role = "admin";
+      user.role = await ensureCurrentUserRole(credential.user.uid);
       loaded.session.currentUserId = user.id;
       await writeCurrentUser(user);
-      save(loaded);
+      writeLocalUi(loaded);
       return loaded;
     } catch (error) {
       if (error.message && !error.code) throw error;
@@ -356,11 +344,10 @@
     const listener = cloudReference.on("value", function (snapshot) {
       const cloudState = snapshot.val();
       if (!cloudState) return;
-      const json = JSON.stringify(cloudState);
-      if (json === lastCloudJson) return;
-      lastCloudJson = json;
-      lastUsersByUid = clone(cloudState.userDirectory || {});
-      lastRolesByUid = clone(cloudState.rolesByUid || {});
+      lastInventoryJson = JSON.stringify(inventoryPayload({
+        tables: cloudState.tables || [],
+        logs: cloudState.logs || []
+      }));
       onChange(mergeCloudWithLocal(cloudState));
     });
     stopWatching = function () {
@@ -372,23 +359,57 @@
     writeLocalUi(state);
     if (!auth || !auth.currentUser) return true;
 
-    const payload = cloudPayload(state);
+    const payload = inventoryPayload(state);
     const json = JSON.stringify(payload);
-    if (json === lastCloudJson) return true;
-    lastCloudJson = json;
+    if (json === lastInventoryJson) return true;
+    lastInventoryJson = json;
 
     writeQueue = writeQueue
       .then(function () {
-        return writeCloudPayload(payload);
+        return writeInventory(payload);
       })
       .catch(function (error) {
         // Başarısız kayıt bir sonraki işlemde yeniden denenebilmelidir.
-        lastCloudJson = "";
+        lastInventoryJson = "";
         window.dispatchEvent(new CustomEvent("depo-file-error", {
           detail: firebaseErrorMessage(error)
         }));
       });
     return true;
+  }
+
+  async function setUserRole(userId, role) {
+    if (!auth || !auth.currentUser) {
+      throw new Error("Yetki değiştirmek için giriş yapmalısınız.");
+    }
+    if (role !== "admin" && role !== "member") {
+      throw new Error("Geçersiz kullanıcı yetkisi.");
+    }
+
+    const cloudState = (await cloudReference.once("value")).val() || {};
+    const currentRole = (cloudState.rolesByUid || {})[auth.currentUser.uid];
+    if (currentRole !== "admin") {
+      throw new Error("Bu işlem yalnızca yöneticiler tarafından yapılabilir.");
+    }
+
+    const users = usersFromCloud(cloudState);
+    const user = users.find(function (entry) {
+      return entry.id === userId;
+    });
+    if (!user || !user.authUid) {
+      throw new Error("Kullanıcı kaydı bulunamadı.");
+    }
+
+    const roles = cloudState.rolesByUid || {};
+    const administratorCount = Object.keys(roles).filter(function (uid) {
+      return roles[uid] === "admin";
+    }).length;
+    if (roles[user.authUid] === "admin" && role === "member" && administratorCount <= 1) {
+      throw new Error("Sistemde en az bir yönetici kalmalıdır.");
+    }
+
+    await rolesReference.child(user.authUid).set(role);
+    return role;
   }
 
   function replace(imported) {
@@ -404,6 +425,7 @@
     register: register,
     signOut: signOut,
     watch: watch,
+    setUserRole: setUserRole,
     replace: replace,
     save: save,
     hasFile: function () { return true; },
