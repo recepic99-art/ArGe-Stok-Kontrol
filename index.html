@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title>Ar-Ge Numune Depo - Web Demo</title>
   <link rel="stylesheet" href="assets/vendor/dockview/dockview.css?v=7.0.3">
-  <link rel="stylesheet" href="assets/css/app.css?v=dock-1">
+  <link rel="stylesheet" href="assets/css/app.css?v=bugfix-9">
 </head>
 <body>
   <div id="app" class="app-shell" aria-hidden="true">
@@ -36,12 +36,12 @@
           <div class="menu-separator"></div>
           <button data-action="show-columns">Sütunlar</button>
           <div class="menu-separator"></div>
-          <button data-action="show-panel-lists">Listeler paneli</button>
-          <button data-action="show-panel-users">Kullanıcılar paneli</button>
-          <button data-action="show-panel-stock">Stok listesi paneli</button>
-          <button data-action="show-panel-stock-card">Stok kartı paneli</button>
-          <button data-action="show-panel-movement">Giriş / Çıkış paneli</button>
-          <button data-action="show-panel-history">Hareket geçmişi paneli</button>
+          <button data-action="show-panel-lists"><span class="menu-check" data-panel-check="lists"></span>Listeler paneli</button>
+          <button data-action="show-panel-users"><span class="menu-check" data-panel-check="users"></span>Kullanıcılar paneli</button>
+          <button data-action="show-panel-stock"><span class="menu-check" data-panel-check="stock"></span>Stok listesi paneli</button>
+          <button data-action="show-panel-stock-card"><span class="menu-check" data-panel-check="stock-card"></span>Stok kartı paneli</button>
+          <button data-action="show-panel-movement"><span class="menu-check" data-panel-check="movement"></span>Giriş / Çıkış paneli</button>
+          <button data-action="show-panel-history"><span class="menu-check" data-panel-check="history"></span>Hareket geçmişi paneli</button>
           <div class="menu-separator"></div>
           <button data-action="reset-layout">Panel düzenini sıfırla</button>
         </div>
@@ -341,9 +341,9 @@
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
   <script src="assets/js/firebase-config.js?v=firebase-4"></script>
-  <script src="firebase-store-v4.js?v=7"></script>
+  <script src="firebase-store-v4.js?v=9"></script>
   <script src="assets/vendor/dockview/dockview.min.js?v=7.0.3"></script>
-  <script src="assets/js/dock-layout.js?v=3"></script>
-  <script src="assets/js/app.js?v=users-7"></script>
+  <script src="assets/js/dock-layout.js?v=6"></script>
+  <script src="assets/js/app.js?v=bugfix-11"></script>
 </body>
 </html>

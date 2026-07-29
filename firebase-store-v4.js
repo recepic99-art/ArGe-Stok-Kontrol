@@ -12,11 +12,21 @@
   let usersReference = null;
   let rolesReference = null;
   let stopWatching = null;
-  let lastInventoryJson = "";
+  let lastCloudInventory = null;
+  let watchCallback = null;
+  let pendingWriteCount = 0;
   let writeQueue = Promise.resolve();
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
+  }
+
+  function toArray(value) {
+    if (Array.isArray(value)) return clone(value);
+    if (!value || typeof value !== "object") return [];
+    return Object.keys(value).map(function (key) {
+      return clone(value[key]);
+    });
   }
 
   function normalizeUsername(value) {
@@ -149,8 +159,8 @@
   function inventoryPayload(state) {
     return {
       schemaVersion: SCHEMA_VERSION,
-      tables: clone(state.tables),
-      logs: clone(state.logs)
+      tables: toArray(state.tables),
+      logs: toArray(state.logs)
     };
   }
 
@@ -160,8 +170,8 @@
     const merged = normalizeState({
       schemaVersion: SCHEMA_VERSION,
       users: usersFromCloud(cloudState),
-      tables: cloudState.tables || [],
-      logs: cloudState.logs || [],
+      tables: toArray(cloudState.tables),
+      logs: toArray(cloudState.logs),
       session: Object.assign({}, defaults.session, localUi.session || {}),
       settings: Object.assign({}, defaults.settings, localUi.settings || {})
     });
@@ -170,6 +180,235 @@
 
   function writeInventory(payload) {
     return cloudReference.update(payload);
+  }
+
+  function recordsById(records) {
+    const result = new Map();
+    toArray(records).forEach(function (record) {
+      if (record && record.id) result.set(record.id, record);
+    });
+    return result;
+  }
+
+  // İki kullanıcının aynı anda yaptığı bağımsız değişiklikler birbirini ezmesin
+  // diye yalnızca yerelde gerçekten değişen kayıtları buluruz.
+  function recordPatch(beforeRecords, afterRecords) {
+    const before = recordsById(beforeRecords);
+    const after = recordsById(afterRecords);
+    const upserts = [];
+    const removedIds = [];
+
+    after.forEach(function (record, id) {
+      const oldRecord = before.get(id);
+      if (!oldRecord || JSON.stringify(oldRecord) !== JSON.stringify(record)) {
+        upserts.push(clone(record));
+      }
+    });
+    before.forEach(function (_record, id) {
+      if (!after.has(id)) removedIds.push(id);
+    });
+    return { upserts: upserts, removedIds: removedIds };
+  }
+
+  function applyRecordPatch(currentRecords, patch) {
+    const records = toArray(currentRecords);
+    const removed = new Set(patch.removedIds);
+    const result = records.filter(function (record) {
+      return record && record.id && !removed.has(record.id);
+    });
+
+    patch.upserts.forEach(function (record) {
+      const index = result.findIndex(function (entry) {
+        return entry.id === record.id;
+      });
+      if (index >= 0) result[index] = clone(record);
+      else result.push(clone(record));
+    });
+    return result;
+  }
+
+  function itemPatch(beforeItems, afterItems) {
+    const before = recordsById(beforeItems);
+    const after = recordsById(afterItems);
+    const changes = [];
+    const removedIds = [];
+
+    after.forEach(function (item, id) {
+      const oldItem = before.get(id);
+      if (!oldItem) {
+        changes.push({ id: id, added: clone(item) });
+        return;
+      }
+
+      const fields = {};
+      Object.keys(item).forEach(function (key) {
+        if (key === "id" || key === "quantity") return;
+        if (JSON.stringify(oldItem[key]) !== JSON.stringify(item[key])) {
+          fields[key] = clone(item[key]);
+        }
+      });
+
+      const oldQuantity = Number(oldItem.quantity);
+      const newQuantity = Number(item.quantity);
+      const quantityChanged = JSON.stringify(oldItem.quantity) !== JSON.stringify(item.quantity);
+      const hasQuantityDelta = Number.isFinite(oldQuantity) && Number.isFinite(newQuantity) &&
+        oldQuantity !== newQuantity;
+      const hasQuantitySet = quantityChanged && !hasQuantityDelta;
+      if (hasQuantityDelta || hasQuantitySet || Object.keys(fields).length) {
+        changes.push({
+          id: id,
+          fields: fields,
+          quantityDelta: hasQuantityDelta ? newQuantity - oldQuantity : 0,
+          quantitySet: hasQuantitySet ? clone(item.quantity) : undefined,
+          fallback: clone(item)
+        });
+      }
+    });
+    before.forEach(function (_item, id) {
+      if (!after.has(id)) removedIds.push(id);
+    });
+    return { changes: changes, removedIds: removedIds };
+  }
+
+  function applyItemPatch(currentItems, patch) {
+    const removed = new Set(patch.removedIds);
+    const items = toArray(currentItems).filter(function (item) {
+      return item && item.id && !removed.has(item.id);
+    });
+
+    patch.changes.forEach(function (change) {
+      let item = items.find(function (entry) {
+        return entry.id === change.id;
+      });
+      if (change.added) {
+        if (!item) items.push(clone(change.added));
+        return;
+      }
+      if (!item) {
+        // Başka bir kullanıcı kartı sildiyse eski ekrandan gelen düzenleme,
+        // silinmiş kartı yeniden oluşturmamalıdır.
+        return;
+      }
+      Object.assign(item, clone(change.fields));
+      if (Object.prototype.hasOwnProperty.call(change, "quantitySet") &&
+          change.quantitySet !== undefined) {
+        item.quantity = clone(change.quantitySet);
+      } else if (change.quantityDelta) {
+        item.quantity = Number(item.quantity || 0) + change.quantityDelta;
+      }
+    });
+    return items;
+  }
+
+  function tablePatch(beforeTables, afterTables) {
+    const before = recordsById(beforeTables);
+    const after = recordsById(afterTables);
+    const changes = [];
+    const removedIds = [];
+
+    after.forEach(function (table, id) {
+      const oldTable = before.get(id);
+      if (!oldTable) {
+        changes.push({ id: id, added: clone(table) });
+        return;
+      }
+
+      const items = itemPatch(oldTable.items, table.items);
+      const nameChanged = oldTable.name !== table.name;
+      if (nameChanged || items.changes.length || items.removedIds.length) {
+        changes.push({
+          id: id,
+          nameChanged: nameChanged,
+          name: table.name,
+          items: items
+        });
+      }
+    });
+    before.forEach(function (_table, id) {
+      if (!after.has(id)) removedIds.push(id);
+    });
+    return { changes: changes, removedIds: removedIds };
+  }
+
+  function applyTablePatch(currentTables, patch) {
+    const removed = new Set(patch.removedIds);
+    const tables = toArray(currentTables).filter(function (table) {
+      return table && table.id && !removed.has(table.id);
+    });
+
+    patch.changes.forEach(function (change) {
+      let table = tables.find(function (entry) {
+        return entry.id === change.id;
+      });
+      if (change.added) {
+        if (!table) tables.push(clone(change.added));
+        return;
+      }
+      if (!table) {
+        // Başka bir kullanıcı listeyi sildiyse eski ekrandan gelen değişiklik,
+        // silinmiş listeyi yeniden oluşturmamalıdır.
+        return;
+      }
+      if (change.nameChanged) table.name = change.name;
+      table.items = applyItemPatch(table.items, change.items);
+    });
+    return tables;
+  }
+
+  function inventoryPatch(before, after) {
+    const base = before || { tables: [], logs: [] };
+    return {
+      tables: tablePatch(base.tables, after.tables),
+      logs: recordPatch(base.logs, after.logs)
+    };
+  }
+
+  function patchIsEmpty(patch) {
+    return (
+      !patch.tables.changes.length &&
+      !patch.tables.removedIds.length &&
+      !patch.logs.upserts.length &&
+      !patch.logs.removedIds.length
+    );
+  }
+
+  async function writeInventoryPatch(patch) {
+    await cloudReference.child("tables").transaction(function (tables) {
+      return applyTablePatch(tables, patch.tables);
+    });
+    await cloudReference.child("logs").transaction(function (logs) {
+      return applyRecordPatch(logs, patch.logs);
+    });
+    await cloudReference.child("schemaVersion").set(SCHEMA_VERSION);
+  }
+
+  async function refreshAfterWrites() {
+    if (pendingWriteCount) return;
+    const snapshot = await cloudReference.once("value");
+    const cloudState = snapshot.val();
+    if (!cloudState) return;
+    lastCloudInventory = inventoryPayload({
+      tables: cloudState.tables || [],
+      logs: cloudState.logs || []
+    });
+    if (watchCallback) watchCallback(mergeCloudWithLocal(cloudState));
+  }
+
+  function queueInventoryWrite(task) {
+    pendingWriteCount += 1;
+    writeQueue = writeQueue
+      .then(task)
+      .then(function () {
+        pendingWriteCount -= 1;
+        return refreshAfterWrites();
+      })
+      .catch(function (error) {
+        pendingWriteCount = Math.max(0, pendingWriteCount - 1);
+        window.dispatchEvent(new CustomEvent("depo-file-error", {
+          detail: firebaseErrorMessage(error)
+        }));
+        return refreshAfterWrites();
+      });
   }
 
   async function writeCurrentUser(user) {
@@ -197,9 +436,19 @@
       return roles[key] === "admin";
     });
     const firstRole = hasAdministrator ? "member" : "admin";
-    const result = await userRoleReference.transaction(function (role) {
-      return role === "admin" || role === "member" ? role : firstRole;
-    });
+    let result;
+    try {
+      result = await userRoleReference.transaction(function (role) {
+        return role === "admin" || role === "member" ? role : firstRole;
+      });
+    } catch (error) {
+      // İki kişi ilk kez aynı anda kaydolursa yalnızca biri ilk yönetici olabilir.
+      // İkinci kayıt, güvenlik kuralına takılmak yerine normal üye olarak tamamlanır.
+      if (firstRole !== "admin") throw error;
+      result = await userRoleReference.transaction(function (role) {
+        return role === "admin" || role === "member" ? role : "member";
+      });
+    }
     const savedRole = result.snapshot.val();
     return savedRole === "admin" ? "admin" : "member";
   }
@@ -254,10 +503,10 @@
       await writeInventory(cloudState);
     }
 
-    lastInventoryJson = JSON.stringify(inventoryPayload({
+    lastCloudInventory = inventoryPayload({
       tables: cloudState.tables || [],
       logs: cloudState.logs || []
-    }));
+    });
     return mergeCloudWithLocal(cloudState);
   }
 
@@ -341,17 +590,20 @@
 
   function watch(onChange) {
     if (stopWatching) stopWatching();
+    watchCallback = onChange;
     const listener = cloudReference.on("value", function (snapshot) {
       const cloudState = snapshot.val();
       if (!cloudState) return;
-      lastInventoryJson = JSON.stringify(inventoryPayload({
+      if (pendingWriteCount) return;
+      lastCloudInventory = inventoryPayload({
         tables: cloudState.tables || [],
         logs: cloudState.logs || []
-      }));
+      });
       onChange(mergeCloudWithLocal(cloudState));
     });
     stopWatching = function () {
       cloudReference.off("value", listener);
+      watchCallback = null;
     };
   }
 
@@ -360,21 +612,15 @@
     if (!auth || !auth.currentUser) return true;
 
     const payload = inventoryPayload(state);
-    const json = JSON.stringify(payload);
-    if (json === lastInventoryJson) return true;
-    lastInventoryJson = json;
-
-    writeQueue = writeQueue
-      .then(function () {
-        return writeInventory(payload);
-      })
-      .catch(function (error) {
-        // Başarısız kayıt bir sonraki işlemde yeniden denenebilmelidir.
-        lastInventoryJson = "";
-        window.dispatchEvent(new CustomEvent("depo-file-error", {
-          detail: firebaseErrorMessage(error)
-        }));
-      });
+    const patch = inventoryPatch(lastCloudInventory, payload);
+    if (patchIsEmpty(patch)) return true;
+    // Aynı istemcide arka arkaya yapılan kayıtlar, önceki yerel değişikliği tekrar
+    // fark olarak hesaplamasın. Bulut yazıları sırayla çalışırken karşılaştırma
+    // tabanını hemen son yerel duruma ilerletiriz.
+    lastCloudInventory = clone(payload);
+    queueInventoryWrite(function () {
+      return writeInventoryPatch(patch);
+    });
     return true;
   }
 
@@ -414,7 +660,12 @@
 
   function replace(imported) {
     const normalized = normalizeState(imported);
-    save(normalized);
+    writeLocalUi(normalized);
+    const payload = inventoryPayload(normalized);
+    lastCloudInventory = clone(payload);
+    queueInventoryWrite(function () {
+      return writeInventory(payload);
+    });
     return normalized;
   }
 
@@ -428,6 +679,7 @@
     setUserRole: setUserRole,
     replace: replace,
     save: save,
+    flush: function () { return writeQueue; },
     hasFile: function () { return true; },
     fileName: function () { return "Firebase ortak veri"; },
     isLocalMode: function () { return false; },

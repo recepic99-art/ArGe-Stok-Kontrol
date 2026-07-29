@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "arge-depo-dock-layout-v3";
+  const STORAGE_KEY = "arge-depo-dock-layout-v4";
   const panelTitles = {
     lists: "Listeler",
     users: "Kullanıcılar",
@@ -112,6 +112,12 @@
     }, 180);
   }
 
+  function syncPanelMenuChecks() {
+    document.querySelectorAll("[data-panel-check]").forEach(function (check) {
+      check.textContent = api && api.getPanel(check.dataset.panelCheck) ? "✓" : "";
+    });
+  }
+
   function restoreLayout() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) {
@@ -155,11 +161,16 @@
     api = window.dockview.createDockview(root, {
       createComponent: createPanelRenderer,
       singleTabMode: "fullwidth",
-      floatingGroupBounds: "boundedWithinViewport"
+      floatingGroupBounds: "boundedWithinViewport",
+      theme: window.dockview.themeLight
     });
 
     restoreLayout();
-    api.onDidLayoutChange(saveLayoutSoon);
+    syncPanelMenuChecks();
+    api.onDidLayoutChange(function () {
+      saveLayoutSoon();
+      syncPanelMenuChecks();
+    });
   }
 
   function showPanel(id) {
@@ -167,6 +178,15 @@
     let panel = api.getPanel(id);
     if (!panel) panel = api.addPanel(panelOptions(id));
     panel.api.setActive();
+    syncPanelMenuChecks();
+  }
+
+  function togglePanel(id) {
+    if (!api || blockedPanels.has(id)) return;
+    const panel = api.getPanel(id);
+    if (panel) api.removePanel(panel);
+    else showPanel(id);
+    syncPanelMenuChecks();
   }
 
   function setPanelAllowed(id, allowed) {
@@ -179,6 +199,7 @@
     blockedPanels.add(id);
     const panel = api.getPanel(id);
     if (panel) api.removePanel(panel);
+    syncPanelMenuChecks();
   }
 
   function setTheme(theme) {
@@ -186,6 +207,11 @@
     if (!root) return;
     root.classList.toggle("dockview-theme-dark", theme === "dark");
     root.classList.toggle("dockview-theme-light", theme !== "dark");
+    if (api) {
+      api.updateOptions({
+        theme: theme === "dark" ? window.dockview.themeDark : window.dockview.themeLight
+      });
+    }
   }
 
   function reset() {
@@ -201,6 +227,7 @@
     showPanel: showPanel,
     setPanelAllowed: setPanelAllowed,
     setTheme: setTheme,
+    togglePanel: togglePanel,
     reset: reset
   };
 }());

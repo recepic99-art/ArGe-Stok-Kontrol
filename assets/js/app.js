@@ -15,6 +15,7 @@
     sortKey: "name",
     sortDirection: "asc",
     formModalSubmit: null,
+    formModalBusy: false,
     contextTableId: null,
     bomRows: [],
     draggedColumn: null
@@ -240,14 +241,22 @@
     });
   }
 
-  async function signOut() {
-    if (!window.confirm("Oturumu kapatmak istiyor musunuz?")) return;
-    await window.DepoStore.signOut();
-    state.session.currentUserId = null;
-    $("app").setAttribute("aria-hidden", "true");
-    $("auth-overlay").hidden = false;
-    $("auth-password").value = "";
-    setAuthMode("login");
+  function signOut() {
+    openFormModal({
+      title: "Oturumu kapat",
+      message: "Oturumu kapatmak istiyor musunuz?",
+      submitLabel: "Çıkış Yap",
+      submitStyle: "danger",
+      onSubmit: async function () {
+        await window.DepoStore.signOut();
+        state.session.currentUserId = null;
+        $("app").setAttribute("aria-hidden", "true");
+        $("auth-overlay").hidden = false;
+        $("auth-password").value = "";
+        setAuthMode("login");
+        return true;
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -684,17 +693,25 @@
       showToast("Silinecek malzemeyi seçin.", true);
       return;
     }
-    if (!window.confirm(ids.length + " stok kartı silinecek. Devam edilsin mi?")) return;
-    const idSet = new Set(ids);
-    active.table.items = active.table.items.filter(function (item) {
-      return !idSet.has(item.id);
+    openFormModal({
+      title: "Stok kartlarını sil",
+      message: ids.length + " stok kartı kalıcı olarak silinecek.",
+      submitLabel: "Kartları Sil",
+      submitStyle: "danger",
+      onSubmit: function () {
+        const idSet = new Set(ids);
+        active.table.items = active.table.items.filter(function (item) {
+          return !idSet.has(item.id);
+        });
+        ui.activeItemId = null;
+        ui.checkedIds.clear();
+        ui.formItemId = null;
+        saveState();
+        renderAll(true);
+        showToast(ids.length + " stok kartı silindi.");
+        return true;
+      }
     });
-    ui.activeItemId = null;
-    ui.checkedIds.clear();
-    ui.formItemId = null;
-    saveState();
-    renderAll(true);
-    showToast(ids.length + " stok kartı silindi.");
   }
 
   function setRightTab(tab) {
@@ -856,6 +873,8 @@
         escapeHtml(field.value || "") + '"' + (field.required ? " required" : "") + "></label>";
     }).join("");
     ui.formModalSubmit = options.onSubmit;
+    ui.formModalBusy = false;
+    submitButton.disabled = false;
     $("form-modal").hidden = false;
     const firstInput = $("form-modal-fields").querySelector("input");
     if (firstInput) window.setTimeout(function () { firstInput.focus(); }, 0);
@@ -864,6 +883,8 @@
   function closeFormModal() {
     $("form-modal").hidden = true;
     ui.formModalSubmit = null;
+    ui.formModalBusy = false;
+    $("form-modal-submit").disabled = false;
   }
 
   function showFormModalError(message) {
@@ -882,9 +903,14 @@
       onSubmit: function (values) {
         const name = values.name.trim();
         if (!name) throw new Error("Liste adı zorunludur.");
+        const duplicate = state.tables.some(function (table) {
+          return normalizeText(table.name) === normalizeText(name);
+        });
+        if (duplicate) throw new Error("Bu isimde bir liste zaten var.");
         const table = { id: uid("table"), name: name, items: [] };
         state.tables.push(table);
         openTable(table.id);
+        showToast("Yeni liste oluşturuldu.");
         return true;
       }
     });
@@ -916,6 +942,10 @@
       onSubmit: function (values) {
         const name = values.name.trim();
         if (!name) throw new Error("Liste adı zorunludur.");
+        const duplicate = state.tables.some(function (entry) {
+          return entry.id !== table.id && normalizeText(entry.name) === normalizeText(name);
+        });
+        if (duplicate) throw new Error("Bu isimde bir liste zaten var.");
         table.name = name;
         saveState();
         renderAll();
@@ -970,26 +1000,34 @@
     reader.onload = function () {
       try {
         const imported = JSON.parse(reader.result);
-        if (!window.confirm("Mevcut yerel demo verisi içe aktarılan yedekle değiştirilsin mi?")) return;
-        const signedInUser = currentUser();
-        state = window.DepoStore.replace(imported);
-        if (signedInUser) {
-          let importedUser = state.users.find(function (user) {
-            return normalizeText(user.username) === normalizeText(signedInUser.username);
-          });
-          if (!importedUser) {
-            importedUser = window.DepoStore.clone(signedInUser);
-            state.users.push(importedUser);
+        openFormModal({
+          title: "JSON yedeğini içe aktar",
+          message: "Firebase'deki mevcut listeler ve hareketler bu yedekle değiştirilecek.",
+          submitLabel: "İçe Aktar",
+          submitStyle: "danger",
+          onSubmit: function () {
+            const signedInUser = currentUser();
+            state = window.DepoStore.replace(imported);
+            if (signedInUser) {
+              let importedUser = state.users.find(function (user) {
+                return normalizeText(user.username) === normalizeText(signedInUser.username);
+              });
+              if (!importedUser) {
+                importedUser = window.DepoStore.clone(signedInUser);
+                state.users.push(importedUser);
+              }
+              state.session.currentUserId = importedUser.id;
+              saveState();
+            }
+            ui.activeItemId = null;
+            ui.checkedIds.clear();
+            ui.formItemId = null;
+            ensureValidSession();
+            renderAll(true);
+            showToast("JSON yedeği içe aktarıldı.");
+            return true;
           }
-          state.session.currentUserId = importedUser.id;
-          saveState();
-        }
-        ui.activeItemId = null;
-        ui.checkedIds.clear();
-        ui.formItemId = null;
-        ensureValidSession();
-        renderAll(true);
-        showToast("JSON yedeği içe aktarıldı.");
+        });
       } catch (error) {
         showToast(error.message || "JSON dosyası okunamadı.", true);
       }
@@ -1168,6 +1206,10 @@
 
   function applyBom() {
     const active = activeTableReference();
+    if (!active) {
+      showToast("BOM çıkışı için açık bir liste bulunamadı.", true);
+      return;
+    }
     const purpose = $("bom-purpose").value.trim();
     const note = $("bom-note").value.trim();
     const selectedRows = ui.bomRows.filter(function (row) { return row.selected && row.matchId; });
@@ -1307,14 +1349,14 @@
         renderColumnsModal();
         $("columns-modal").hidden = false;
       },
-      "show-panel-lists": function () { window.DepoDock.showPanel("lists"); },
-      "show-panel-users": function () { window.DepoDock.showPanel("users"); },
-      "show-panel-stock": function () { window.DepoDock.showPanel("stock"); },
+      "show-panel-lists": function () { window.DepoDock.togglePanel("lists"); },
+      "show-panel-users": function () { window.DepoDock.togglePanel("users"); },
+      "show-panel-stock": function () { window.DepoDock.togglePanel("stock"); },
       "show-panel-stock-card": function () {
-        if (currentUserIsAdmin()) window.DepoDock.showPanel("stock-card");
+        if (currentUserIsAdmin()) window.DepoDock.togglePanel("stock-card");
       },
-      "show-panel-movement": function () { window.DepoDock.showPanel("movement"); },
-      "show-panel-history": function () { window.DepoDock.showPanel("history"); },
+      "show-panel-movement": function () { window.DepoDock.togglePanel("movement"); },
+      "show-panel-history": function () { window.DepoDock.togglePanel("history"); },
       "reset-layout": function () {
         state.settings.leftWidth = 250;
         state.settings.rightWidth = 330;
@@ -1326,7 +1368,7 @@
         if (window.DepoDock) window.DepoDock.reset();
       },
       "show-about": function () {
-        window.alert("Ar-Ge Numune Depo Web Demo\n\nKullanıcılar, listeler ve hareketler seçilen JSON dosyasında tutulur. Gerçek sunucu bağlantısı içermez.");
+        window.alert("Ar-Ge Numune Depo\n\nKullanıcılar, listeler ve hareketler Firebase ortak verisinde tutulur.");
       },
       "rename-table": function () {
         const tableId = ui.contextTableId;
@@ -1516,15 +1558,23 @@
   $("movement-type").addEventListener("change", syncMovementForm);
   $("history-scope").addEventListener("change", renderHistory);
 
-  $("form-modal-form").addEventListener("submit", function (event) {
+  $("form-modal-form").addEventListener("submit", async function (event) {
     event.preventDefault();
-    if (!ui.formModalSubmit) return;
+    if (!ui.formModalSubmit || ui.formModalBusy) return;
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const submitButton = $("form-modal-submit");
+    ui.formModalBusy = true;
+    submitButton.disabled = true;
     try {
-      const shouldClose = ui.formModalSubmit(values);
+      const shouldClose = await Promise.resolve(ui.formModalSubmit(values));
       if (shouldClose !== false) closeFormModal();
     } catch (error) {
       showFormModalError(error.message || "İşlem tamamlanamadı.");
+    } finally {
+      if (!$("form-modal").hidden) {
+        ui.formModalBusy = false;
+        submitButton.disabled = false;
+      }
     }
   });
 

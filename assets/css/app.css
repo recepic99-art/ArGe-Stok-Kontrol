@@ -386,6 +386,53 @@ button {
   letter-spacing: 0;
 }
 
+/*
+ * Tek sekmeli docklarda ayrı bir üst bar göstermeyiz. Dockview'in gerçek
+ * sürükleme sekmesi panelin kendi başlığının üzerinde görünmez bir tutma alanı
+ * olarak kalır; böylece sürükleme önizlemesi ve bırakma sistemi bozulmaz.
+ */
+.dockview-root .dv-groupview {
+  position: relative;
+}
+
+.dockview-root .dv-tabs-and-actions-container.dv-single-tab {
+  position: absolute;
+  z-index: 8;
+  top: 0;
+  left: 0;
+  width: min(240px, 60%);
+  height: 60px;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+}
+
+.dockview-root .dv-tabs-and-actions-container.dv-single-tab:active {
+  cursor: grabbing;
+}
+
+.dockview-root .dv-tabs-and-actions-container.dv-single-tab .dv-default-tab {
+  opacity: 0;
+}
+
+.dockview-root .dv-tabs-and-actions-container.dv-single-tab .dv-tab {
+  background: transparent !important;
+  color: transparent !important;
+}
+
+.dockview-root .dv-tabs-and-actions-container.dv-single-tab .dv-default-tab-action,
+.dockview-root .dv-tabs-and-actions-container.dv-single-tab .dv-scrollbar {
+  display: none;
+}
+
+.dockview-root .dv-resize-container > .dv-floating-titlebar {
+  display: none;
+}
+
+.dockview-root .dv-resize-container-with-titlebar > .dv-grid-view {
+  padding-top: 0;
+}
+
 .dock-panel-body {
   width: 100%;
   height: 100%;
