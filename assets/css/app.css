@@ -176,6 +176,8 @@ button {
 }
 
 .app-header {
+  position: relative;
+  z-index: 1200;
   display: flex;
   min-width: 0;
   align-items: center;
@@ -276,6 +278,7 @@ button {
 }
 
 .account-menu {
+  z-index: 1300;
   right: 0;
   left: auto;
   border-radius: 7px;
@@ -1159,7 +1162,8 @@ body.is-resizing-column * {
 
 .modal-overlay {
   position: fixed;
-  z-index: 100;
+  /* Dockview surukleme katmanlari 999 kullanir; pencereler her zaman ustte kalmali. */
+  z-index: 2000;
   inset: 0;
   display: grid;
   place-items: center;
@@ -1427,7 +1431,7 @@ body.is-resizing-column * {
 
 .toast-region {
   position: fixed;
-  z-index: 200;
+  z-index: 2100;
   right: 18px;
   bottom: 18px;
   display: grid;

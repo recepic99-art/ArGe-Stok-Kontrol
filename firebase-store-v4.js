@@ -506,7 +506,51 @@
     return error && error.message || "Firebase işlemi tamamlanamadı.";
   }
 
-  function initialize() {
+  function waitForInitialAuthState() {
+    return new Promise(function (resolve, reject) {
+      let unsubscribe = null;
+      unsubscribe = auth.onAuthStateChanged(
+        function (firebaseUser) {
+          if (unsubscribe) unsubscribe();
+          resolve(firebaseUser);
+        },
+        function (error) {
+          if (unsubscribe) unsubscribe();
+          reject(error);
+        }
+      );
+    });
+  }
+
+  // Firebase tarayicida oturumu saklar. Sayfa yenilendiginde bu kimligi ortak
+  // kullanici kaydi ve guncel yetkiyle yeniden birlestiririz.
+  async function restoreAuthenticatedSession(firebaseUser) {
+    const loaded = await loadCloudState();
+    let user = loaded.users.find(function (entry) {
+      return entry.authUid === firebaseUser.uid;
+    });
+
+    if (!user) {
+      const emailUsername = String(firebaseUser.email || "").split("@")[0];
+      const username = emailUsername || firebaseUser.uid.slice(0, 8);
+      user = {
+        id: "user-" + firebaseUser.uid,
+        authUid: firebaseUser.uid,
+        username: username,
+        name: firebaseUser.displayName || username,
+        role: "member"
+      };
+      loaded.users.push(user);
+    }
+
+    user.role = await ensureCurrentUserRole(firebaseUser.uid);
+    loaded.session.currentUserId = user.id;
+    await writeCurrentUser(user);
+    writeLocalUi(loaded);
+    return loaded;
+  }
+
+  async function initialize() {
     if (!window.firebase || !window.DepoFirebaseConfig) {
       throw new Error("Firebase kitaplığı veya yapılandırması yüklenemedi.");
     }
@@ -520,8 +564,19 @@
     usersReference = cloudReference.child("userDirectory");
     rolesReference = cloudReference.child("rolesByUid");
 
-    // Giriş yapılmadan bulut verisi okunamaz; ekranda yalnızca yerel görünüm ayarları hazırlanır.
-    return Promise.resolve(normalizeState(window.DepoData.createInitialState()));
+    // LOCAL kalicilik, ayni tarayicida F5 veya tarayiciyi kapatip acma sonrasinda
+    // tekrar sifre sormadan Firebase kullanicisini geri getirir.
+    await auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
+    const firebaseUser = await waitForInitialAuthState();
+    if (firebaseUser) {
+      return restoreAuthenticatedSession(firebaseUser);
+    }
+
+    // Giris yokken yalnizca yerel gorunum ayarlari hazirlanir. Eski bir kullanici
+    // kimligi kalmissa uygulamanin yanlislikla acik baslamamasi icin temizlenir.
+    const initialState = normalizeState(window.DepoData.createInitialState());
+    initialState.session.currentUserId = null;
+    return initialState;
   }
 
   async function loadCloudState() {

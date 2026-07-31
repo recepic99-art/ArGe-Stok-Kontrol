@@ -236,8 +236,7 @@
 
   function useLoadedState(loaded) {
     state = loaded;
-    // Firebase oturumu kalıcı olsa bile uygulama her açılışta tekrar giriş ister.
-    state.session.currentUserId = null;
+    // Firebase oturumu açıksa kullanıcı kimliği korunur ve sayfa yenilenince devam edilir.
     ui.activeItemId = null;
     ui.checkedIds.clear();
     ui.formItemId = null;
@@ -306,6 +305,7 @@
       onSubmit: async function () {
         await window.DepoStore.signOut();
         state.session.currentUserId = null;
+        saveState();
         $("app").setAttribute("aria-hidden", "true");
         $("auth-overlay").hidden = false;
         $("auth-password").value = "";
@@ -2007,6 +2007,9 @@
     updateFileStatus();
     setAuthMode("login");
     $("auth-json-status").textContent = "Firebase ortak veri";
+    if (state.session.currentUserId) {
+      openApplication();
+    }
   } catch (error) {
     $("auth-json-status").textContent = "Firebase bağlantı hatası";
     showAuthError(friendlyErrorMessage(error, "Firebase başlatılamadı."));
