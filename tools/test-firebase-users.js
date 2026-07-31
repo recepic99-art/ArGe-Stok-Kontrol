@@ -1,13 +1,14 @@
 const assert = require("node:assert");
 const fs = require("node:fs");
+const path = require("node:path");
 const vm = require("node:vm");
 
 const storeSource = fs.readFileSync(
-  require("node:path").join(__dirname, "..", "firebase-store-v4.js"),
+  path.join(__dirname, "..", "firebase-store-v4.js"),
   "utf8"
 );
 
-const initialUsers = [
+const legacyUsers = [
   {
     id: "u-recep",
     username: "recep",
@@ -19,8 +20,8 @@ const initialUsers = [
 
 const sharedDatabase = {
   appState: {
-    schemaVersion: 3,
-    users: clone(initialUsers),
+    schemaVersion: 4,
+    users: clone(legacyUsers),
     tables: [],
     logs: [],
     rolesByUid: {}
@@ -28,8 +29,8 @@ const sharedDatabase = {
 };
 
 const accounts = {
-  "recep@argestokkontrol.app": {
-    uid: "uid-recep",
+  "recepic@argestokkontrol.app": {
+    uid: "uid-recepic",
     displayName: "Recep İç"
   },
   "ali@argestokkontrol.app": {
@@ -38,45 +39,99 @@ const accounts = {
   }
 };
 
+const cloudListeners = [];
+
 function clone(value) {
+  if (value === undefined) return undefined;
   return JSON.parse(JSON.stringify(value));
 }
 
-function valueAtPath(path) {
-  return path.split("/").filter(Boolean).reduce(function (value, key) {
-    return value && value[key];
+function pathParts(value) {
+  return String(value || "").split("/").filter(Boolean);
+}
+
+function valueAtPath(value) {
+  return pathParts(value).reduce(function (current, key) {
+    return current == null ? undefined : current[key];
   }, sharedDatabase);
 }
 
-function writeAtPath(path, value) {
-  const keys = path.split("/").filter(Boolean);
+function writeAtPath(value, nextValue) {
+  const keys = pathParts(value);
   let target = sharedDatabase;
   keys.slice(0, -1).forEach(function (key) {
-    if (!target[key]) target[key] = {};
+    if (!target[key] || typeof target[key] !== "object") target[key] = {};
     target = target[key];
   });
-  target[keys.at(-1)] = clone(value);
+  target[keys.at(-1)] = clone(nextValue);
+}
+
+function snapshot(value) {
+  return {
+    val: function () {
+      return clone(value);
+    }
+  };
+}
+
+function notifyCloudListeners() {
+  cloudListeners.forEach(function (listener) {
+    listener(snapshot(sharedDatabase.appState));
+  });
+}
+
+function createReference(referencePath) {
+  return {
+    child(key) {
+      return createReference(referencePath + "/" + key);
+    },
+    async once() {
+      return snapshot(valueAtPath(referencePath));
+    },
+    async set(value) {
+      writeAtPath(referencePath, value);
+      notifyCloudListeners();
+    },
+    async update(updates) {
+      Object.keys(updates).forEach(function (relativePath) {
+        writeAtPath(referencePath + "/" + relativePath, updates[relativePath]);
+      });
+      notifyCloudListeners();
+    },
+    async transaction(updater) {
+      const nextValue = updater(clone(valueAtPath(referencePath)));
+      writeAtPath(referencePath, nextValue);
+      notifyCloudListeners();
+      return {
+        committed: true,
+        snapshot: snapshot(nextValue)
+      };
+    },
+    on(eventName, listener) {
+      cloudListeners.push(listener);
+      return listener;
+    },
+    off() {}
+  };
 }
 
 function createClient() {
-  let currentUser = null;
   const localValues = new Map();
-  const listeners = [];
-
   const auth = {
     currentUser: null,
     async signInWithEmailAndPassword(email) {
       const account = accounts[email];
       if (!account) throw new Error("Kullanıcı bulunamadı.");
-      currentUser = {
+      const user = {
         uid: account.uid,
         displayName: account.displayName,
         async updateProfile(profile) {
           this.displayName = profile.displayName;
-        }
+        },
+        async delete() {}
       };
-      auth.currentUser = currentUser;
-      return { user: currentUser };
+      auth.currentUser = user;
+      return { user: user };
     },
     async createUserWithEmailAndPassword(email) {
       return auth.signInWithEmailAndPassword(email);
@@ -86,42 +141,29 @@ function createClient() {
     }
   };
 
-  const reference = {
-    async once() {
-      return { val: function () { return clone(sharedDatabase.appState); } };
-    },
-    async update(updates) {
-      Object.keys(updates).forEach(function (path) {
-        writeAtPath("appState/" + path, updates[path]);
-      });
-      listeners.forEach(function (listener) {
-        listener({ val: function () { return clone(sharedDatabase.appState); } });
-      });
-    },
-    on(eventName, listener) {
-      listeners.push(listener);
-      return listener;
-    },
-    off() {}
-  };
-
   const window = {
     firebase: {
       apps: [],
       initializeApp() {
         this.apps.push({});
       },
-      auth: function () { return auth; },
+      auth: function () {
+        return auth;
+      },
       database: function () {
-        return { ref: function () { return reference; } };
+        return {
+          ref: function (referencePath) {
+            return createReference(referencePath);
+          }
+        };
       }
     },
     DepoFirebaseConfig: {},
     DepoData: {
       createInitialState: function () {
         return {
-          schemaVersion: 3,
-          users: clone(initialUsers),
+          schemaVersion: 4,
+          users: clone(legacyUsers),
           tables: [],
           logs: [],
           session: {
@@ -138,8 +180,12 @@ function createClient() {
       }
     },
     localStorage: {
-      getItem(key) { return localValues.get(key) || null; },
-      setItem(key, value) { localValues.set(key, value); }
+      getItem(key) {
+        return localValues.get(key) || null;
+      },
+      setItem(key, value) {
+        localValues.set(key, value);
+      }
     },
     dispatchEvent() {}
   };
@@ -152,52 +198,248 @@ function createClient() {
   return window.DepoStore;
 }
 
+function authenticatedUsers(state) {
+  return state.users.filter(function (user) {
+    return Boolean(user.authUid);
+  });
+}
+
 (async function () {
+  const administratorClient = createClient();
+  await administratorClient.initialize();
+  const administratorState = await administratorClient.register(
+    "recepic",
+    "demo123",
+    "Recep İç"
+  );
+
+  assert.equal(authenticatedUsers(administratorState).length, 1);
+  assert.equal(authenticatedUsers(administratorState)[0].role, "admin");
+  assert.equal(valueAtPath("appState/rolesByUid/uid-recepic"), "admin");
+
   const memberClient = createClient();
   await memberClient.initialize();
   const memberState = await memberClient.register("ali", "demo123", "Ali");
-
   assert.equal(
-    memberState.users.find(function (user) { return user.username === "ali"; }).role,
+    authenticatedUsers(memberState).find(function (user) {
+      return user.username === "ali";
+    }).role,
     "member"
   );
 
-  // Eski sürümün listeyi yalnızca ikinci kullanıcıyla ezdiği bozuk durumu
-  // taklit ederiz. Yeni sürüm başlangıç yöneticisini yine bulabilmelidir.
-  sharedDatabase.appState.users = [
-    {
-      id: "user-uid-ali",
-      username: "ali",
-      name: "Ali",
-      authUid: "uid-ali",
-      role: "admin"
-    }
-  ];
-  sharedDatabase.appState.userDirectory["uid-ali"].role = "admin";
-  sharedDatabase.appState.rolesByUid["uid-ali"] = "admin";
+  // Eski veya eksik bir tarayıcı yalnız stok kaydederken kullanıcı dizinine
+  // dokunamamalıdır.
+  memberClient.save({
+    users: [authenticatedUsers(memberState)[1]],
+    tables: [{ id: "table-test", name: "Test", items: [] }],
+    logs: [],
+    session: memberState.session,
+    settings: memberState.settings
+  });
+  await memberClient.flush();
+  assert.equal(Object.keys(valueAtPath("appState/userDirectory")).length, 2);
 
-  const administratorClient = createClient();
-  await administratorClient.initialize();
-  const administratorState = await administratorClient.signIn("recep", "demo123");
+  await assert.rejects(
+    memberClient.setUserRole("user-uid-ali", "admin"),
+    /yalnızca yöneticiler/
+  );
 
+  await administratorClient.setUserRole("user-uid-ali", "admin");
+  assert.equal(valueAtPath("appState/rolesByUid/uid-ali"), "admin");
+
+  const freshClient = createClient();
+  await freshClient.initialize();
+  const freshState = await freshClient.signIn("ali", "demo123");
+  assert.deepEqual(
+    authenticatedUsers(freshState).map(function (user) {
+      return user.username;
+    }).sort(),
+    ["ali", "recepic"]
+  );
   assert.equal(
-    administratorState.users.find(function (user) { return user.username === "recep"; }).role,
+    authenticatedUsers(freshState).find(function (user) {
+      return user.username === "ali";
+    }).role,
     "admin"
   );
 
-  const freshMemberClient = createClient();
-  await freshMemberClient.initialize();
-  const freshMemberState = await freshMemberClient.signIn("ali", "demo123");
-  const visibleUsers = freshMemberState.users.filter(function (user) {
-    return Boolean(user.authUid);
-  });
+  // İki bilgisayar aynı anda liste oluşturduğunda son yazan ilk listeyi ezmemelidir.
+  const firstInventoryClient = createClient();
+  const secondInventoryClient = createClient();
+  await firstInventoryClient.initialize();
+  await secondInventoryClient.initialize();
+  const firstInventoryState = await firstInventoryClient.signIn("recepic", "demo123");
+  const secondInventoryState = await secondInventoryClient.signIn("ali", "demo123");
+
+  firstInventoryState.tables.push({ id: "table-first", name: "Birinci", items: [] });
+  secondInventoryState.tables.push({ id: "table-second", name: "İkinci", items: [] });
+  firstInventoryClient.save(firstInventoryState);
+  secondInventoryClient.save(secondInventoryState);
+  await Promise.all([
+    firstInventoryClient.flush(),
+    secondInventoryClient.flush()
+  ]);
 
   assert.deepEqual(
-    visibleUsers.map(function (user) { return user.username; }).sort(),
-    ["ali", "recep"]
+    valueAtPath("appState/tables").map(function (table) { return table.id; }).sort(),
+    ["table-first", "table-second", "table-test"]
   );
-  assert.equal(Object.keys(valueAtPath("appState/userDirectory")).length, 2);
-  console.log("OK: İki temiz tarayıcı ortak kullanıcı dizinini görüyor.");
+
+  // Aynı listenin farklı stok kartlarına yapılan eşzamanlı eklemeler de korunmalıdır.
+  const firstItemClient = createClient();
+  const secondItemClient = createClient();
+  await firstItemClient.initialize();
+  await secondItemClient.initialize();
+  const firstItemState = await firstItemClient.signIn("recepic", "demo123");
+  const secondItemState = await secondItemClient.signIn("ali", "demo123");
+  firstItemState.tables.find(function (table) {
+    return table.id === "table-test";
+  }).items.push({ id: "item-first", name: "Birinci malzeme" });
+  secondItemState.tables.find(function (table) {
+    return table.id === "table-test";
+  }).items.push({ id: "item-second", name: "İkinci malzeme" });
+
+  firstItemClient.save(firstItemState);
+  secondItemClient.save(secondItemState);
+  await Promise.all([
+    firstItemClient.flush(),
+    secondItemClient.flush()
+  ]);
+
+  assert.deepEqual(
+    valueAtPath("appState/tables").find(function (table) {
+      return table.id === "table-test";
+    }).items.map(function (item) { return item.id; }).sort(),
+    ["item-first", "item-second"]
+  );
+
+  // Aynı malzemeden iki kişi aynı anda çıkış yaptığında iki eksiltme de uygulanmalıdır.
+  const seedClient = createClient();
+  await seedClient.initialize();
+  const seedState = await seedClient.signIn("recepic", "demo123");
+  seedState.tables.find(function (table) {
+    return table.id === "table-test";
+  }).items.find(function (item) {
+    return item.id === "item-first";
+  }).quantity = 10;
+  seedClient.save(seedState);
+  await seedClient.flush();
+
+  const firstMovementClient = createClient();
+  const secondMovementClient = createClient();
+  await firstMovementClient.initialize();
+  await secondMovementClient.initialize();
+  const firstMovementState = await firstMovementClient.signIn("recepic", "demo123");
+  const secondMovementState = await secondMovementClient.signIn("ali", "demo123");
+  firstMovementState.tables.find(function (table) {
+    return table.id === "table-test";
+  }).items.find(function (item) {
+    return item.id === "item-first";
+  }).quantity -= 1;
+  secondMovementState.tables.find(function (table) {
+    return table.id === "table-test";
+  }).items.find(function (item) {
+    return item.id === "item-first";
+  }).quantity -= 1;
+  firstMovementState.logs.push({ id: "log-first", itemId: "item-first", quantity: 1 });
+  secondMovementState.logs.push({ id: "log-second", itemId: "item-first", quantity: 1 });
+
+  firstMovementClient.save(firstMovementState);
+  secondMovementClient.save(secondMovementState);
+  await Promise.all([
+    firstMovementClient.flush(),
+    secondMovementClient.flush()
+  ]);
+
+  assert.equal(
+    valueAtPath("appState/tables").find(function (table) {
+      return table.id === "table-test";
+    }).items.find(function (item) {
+      return item.id === "item-first";
+    }).quantity,
+    8
+  );
+  assert.deepEqual(
+    valueAtPath("appState/logs").map(function (log) { return log.id; }).sort(),
+    ["log-first", "log-second"]
+  );
+
+  // Bağlantı yavaşken aynı istemcinin peş peşe yaptığı işlemler tekrar sayılmamalıdır.
+  const rapidClient = createClient();
+  await rapidClient.initialize();
+  const rapidState = await rapidClient.signIn("recepic", "demo123");
+  const rapidItem = rapidState.tables.find(function (table) {
+    return table.id === "table-test";
+  }).items.find(function (item) {
+    return item.id === "item-first";
+  });
+  rapidItem.quantity -= 1;
+  rapidClient.save(rapidState);
+  rapidItem.quantity -= 1;
+  rapidClient.save(rapidState);
+  await rapidClient.flush();
+
+  assert.equal(
+    valueAtPath("appState/tables").find(function (table) {
+      return table.id === "table-test";
+    }).items.find(function (item) {
+      return item.id === "item-first";
+    }).quantity,
+    6
+  );
+
+  // Eski açık ekrandan gelen bir düzenleme, başka kullanıcının sildiği kaydı diriltmemelidir.
+  const deletionSeedClient = createClient();
+  await deletionSeedClient.initialize();
+  const deletionSeedState = await deletionSeedClient.signIn("recepic", "demo123");
+  deletionSeedState.tables.push({
+    id: "table-delete",
+    name: "Silinecek",
+    items: [{ id: "item-delete", name: "Silinecek malzeme", quantity: 5 }]
+  });
+  deletionSeedClient.save(deletionSeedState);
+  await deletionSeedClient.flush();
+
+  const deletingClient = createClient();
+  const staleClient = createClient();
+  await deletingClient.initialize();
+  await staleClient.initialize();
+  const deletingState = await deletingClient.signIn("recepic", "demo123");
+  const staleState = await staleClient.signIn("ali", "demo123");
+  deletingState.tables = deletingState.tables.filter(function (table) {
+    return table.id !== "table-delete";
+  });
+  staleState.tables.find(function (table) {
+    return table.id === "table-delete";
+  }).name = "Eski ekrandan değişiklik";
+  deletingClient.save(deletingState);
+  await deletingClient.flush();
+  staleClient.save(staleState);
+  await staleClient.flush();
+
+  assert.equal(
+    valueAtPath("appState/tables").some(function (table) {
+      return table.id === "table-delete";
+    }),
+    false
+  );
+
+  // Firebase boş diziyi saklamadığı için yeni liste `items` alanı olmadan gelebilir.
+  sharedDatabase.appState.tables.push({
+    id: "table-empty-from-firebase",
+    name: "Firebase boş liste"
+  });
+  const emptyTableClient = createClient();
+  await emptyTableClient.initialize();
+  const emptyTableState = await emptyTableClient.signIn("recepic", "demo123");
+  assert.deepEqual(
+    emptyTableState.tables.find(function (table) {
+      return table.id === "table-empty-from-firebase";
+    }).items,
+    []
+  );
+
+  console.log("OK: Kullanıcılar, yetkiler ve eşzamanlı stok kayıtları kararlı.");
 }()).catch(function (error) {
   console.error(error);
   process.exitCode = 1;

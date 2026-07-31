@@ -258,6 +258,33 @@ button {
   margin-left: auto;
 }
 
+.account-menu-group {
+  height: 36px;
+}
+
+.account-menu-group .menu-trigger {
+  height: 36px;
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+
+.account-menu-group .menu-trigger:hover,
+.account-menu-group .menu-trigger.is-open {
+  border-color: var(--primary);
+  background: var(--surface-raised);
+}
+
+.account-menu {
+  right: 0;
+  left: auto;
+  border-radius: 7px;
+}
+
+.account-menu .context-danger {
+  color: var(--danger);
+}
+
 #json-file-button {
   max-width: 190px;
   overflow: hidden;
@@ -773,7 +800,7 @@ textarea.control {
 .stock-toolbar {
   display: grid;
   min-width: 0;
-  grid-template-columns: auto minmax(190px, 1fr) auto auto;
+  grid-template-columns: auto minmax(190px, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
@@ -902,6 +929,44 @@ input[type="checkbox"] {
   text-align: left;
   white-space: nowrap;
   cursor: default;
+}
+
+.data-table th[data-key],
+.data-table th[data-history-column] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.column-resizer {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.column-resizer::after {
+  position: absolute;
+  top: 7px;
+  right: 3px;
+  bottom: 7px;
+  width: 1px;
+  content: "";
+  background: transparent;
+}
+
+.column-resizer:hover::after,
+body.is-resizing-column .column-resizer::after {
+  background: color-mix(in srgb, var(--primary) 70%, transparent);
+}
+
+body.is-resizing-column,
+body.is-resizing-column * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .stock-table th[data-key]:not([data-key="select"]) {
@@ -1065,13 +1130,31 @@ input[type="checkbox"] {
 }
 
 .history-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
   margin: 0;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
 }
 
+.history-search {
+  width: 100%;
+  grid-column: 1 / -1;
+}
+
+.history-search input {
+  height: 32px;
+}
+
+.history-search .search-icon {
+  top: 8px;
+}
+
 .history-table {
-  min-width: 860px;
+  width: max-content;
+  min-width: 100%;
 }
 
 .modal-overlay {

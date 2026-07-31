@@ -18,7 +18,9 @@
     formModalBusy: false,
     contextTableId: null,
     bomRows: [],
-    draggedColumn: null
+    draggedColumn: null,
+    isResizingColumn: false,
+    suppressColumnClick: false
   };
 
   const $ = function (id) {
@@ -30,6 +32,31 @@
       return [column.key, column];
     })
   );
+
+  const defaultColumnWidths = {
+    id: 100,
+    name: 180,
+    category: 150,
+    footprint: 100,
+    box: 90,
+    quantity: 90,
+    unit: 85,
+    critical: 110,
+    description: 230,
+    updatedAt: 145
+  };
+
+  const defaultHistoryColumnWidths = {
+    date: 145,
+    itemName: 180,
+    type: 80,
+    quantity: 75,
+    purpose: 210,
+    user: 120,
+    note: 180,
+    before: 75,
+    after: 75
+  };
 
   // ---------------------------------------------------------------------------
   // Genel yardımcılar
@@ -91,6 +118,12 @@
     }
     if (/network|failed to fetch|offline/i.test(message)) {
       return "Bağlantı kurulamadı. İnternet bağlantısını kontrol edin.";
+    }
+    if (/invalid-credential|wrong-password|invalid-login-credentials/i.test(message)) {
+      return "Mevcut şifre hatalı.";
+    }
+    if (/email-already-in-use/i.test(message)) {
+      return "Bu kullanıcı adı kullanılıyor. Daha özgün bir ad seçin.";
     }
     if (/cannot (read|set)|undefined|null|is not a function/i.test(message)) {
       return fallback || "Beklenmeyen bir arayüz hatası oluştu.";
@@ -282,6 +315,81 @@
     });
   }
 
+  function editCurrentAccount() {
+    const user = currentUser();
+    if (!user) return;
+
+    openFormModal({
+      title: "Hesap bilgileri",
+      message: "Kullanıcı adını değiştiriyorsanız mevcut şifrenizi de yazın.",
+      fields: [
+        { name: "name", label: "Ad Soyad", value: user.name, required: true },
+        { name: "username", label: "Kullanıcı adı", value: user.username, required: true },
+        {
+          name: "currentPassword",
+          label: "Mevcut şifre",
+          type: "password",
+          autocomplete: "current-password",
+          placeholder: "Yalnızca kullanıcı adı değişecekse gerekli"
+        }
+      ],
+      submitLabel: "Bilgileri Kaydet",
+      onSubmit: async function (values) {
+        const updated = await window.DepoStore.updateCurrentUserProfile({
+          name: values.name,
+          username: values.username,
+          currentPassword: values.currentPassword
+        });
+        Object.assign(user, updated);
+        $("auth-username").value = updated.username;
+        renderAll(false);
+        showToast("Hesap bilgileri güncellendi.");
+        return true;
+      }
+    });
+  }
+
+  function changeCurrentPassword() {
+    openFormModal({
+      title: "Şifreyi değiştir",
+      fields: [
+        {
+          name: "currentPassword",
+          label: "Mevcut şifre",
+          type: "password",
+          autocomplete: "current-password",
+          required: true
+        },
+        {
+          name: "newPassword",
+          label: "Yeni şifre",
+          type: "password",
+          autocomplete: "new-password",
+          required: true
+        },
+        {
+          name: "confirmPassword",
+          label: "Yeni şifre tekrar",
+          type: "password",
+          autocomplete: "new-password",
+          required: true
+        }
+      ],
+      submitLabel: "Şifreyi Değiştir",
+      onSubmit: async function (values) {
+        if (values.newPassword !== values.confirmPassword) {
+          throw new Error("Yeni şifreler birbiriyle aynı değil.");
+        }
+        await window.DepoStore.changeCurrentUserPassword(
+          values.currentPassword,
+          values.newPassword
+        );
+        showToast("Şifreniz değiştirildi.");
+        return true;
+      }
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Ana ekranın çizilmesi
   // ---------------------------------------------------------------------------
@@ -361,10 +469,14 @@
   }
 
   function renderUsersPanel() {
+    if (!currentUserIsAdmin()) {
+      $("users-summary").textContent = "";
+      $("user-list").innerHTML = "";
+      return;
+    }
     const signedUpUsers = state.users.filter(function (user) {
       return Boolean(user.authUid);
     });
-    const mayManage = currentUserIsAdmin();
     $("users-summary").textContent = signedUpUsers.length + " kayıtlı kullanıcı";
     $("user-list").innerHTML = signedUpUsers.map(function (user) {
       const isCurrent = user.id === state.session.currentUserId;
@@ -373,7 +485,7 @@
         '<span class="user-identity"><strong>' + escapeHtml(user.name || user.username) + '</strong>' +
         '<small>@' + escapeHtml(user.username) + (isCurrent ? " · Siz" : "") + '</small></span>' +
         '<select class="user-role-select" data-user-role-id="' + escapeHtml(user.id) + '"' +
-        (mayManage ? "" : " disabled") + ' aria-label="Kullanıcı yetkisi">' +
+        ' aria-label="Kullanıcı yetkisi">' +
         '<option value="member"' + (user.role !== "admin" ? " selected" : "") + '>Üye</option>' +
         '<option value="admin"' + (user.role === "admin" ? " selected" : "") + '>Yönetici</option>' +
         '</select></div>';
@@ -451,6 +563,35 @@
   // ---------------------------------------------------------------------------
   // Stok tablosu, sıralama ve sütunlar
   // ---------------------------------------------------------------------------
+
+  function ensureColumnWidthSettings() {
+    state.settings.columnWidths = Object.assign(
+      {},
+      defaultColumnWidths,
+      state.settings.columnWidths || {}
+    );
+    state.settings.historyColumnWidths = Object.assign(
+      {},
+      defaultHistoryColumnWidths,
+      state.settings.historyColumnWidths || {}
+    );
+  }
+
+  function savedColumnWidth(group, key) {
+    ensureColumnWidthSettings();
+    const widths = group === "history"
+      ? state.settings.historyColumnWidths
+      : state.settings.columnWidths;
+    const fallback = group === "history"
+      ? defaultHistoryColumnWidths[key]
+      : defaultColumnWidths[key];
+    return Math.max(55, Number(widths[key]) || fallback || 100);
+  }
+
+  function columnWidthStyle(group, key) {
+    const width = savedColumnWidth(group, key);
+    return "width:" + width + "px;min-width:" + width + "px;max-width:" + width + "px";
+  }
 
   function orderedVisibleColumns() {
     const visible = new Set(state.settings.visibleColumns);
@@ -560,8 +701,12 @@
         const indicator = ui.sortKey === column.key
           ? '<span class="sort-indicator">' + (ui.sortDirection === "asc" ? "↑" : "↓") + "</span>"
           : "";
-        return '<th draggable="true" data-key="' + escapeHtml(column.key) + '">' +
-          escapeHtml(column.label) + indicator + "</th>";
+        return '<th draggable="true" data-key="' + escapeHtml(column.key) +
+          '" data-stock-column="' + escapeHtml(column.key) + '" style="' +
+          columnWidthStyle("stock", column.key) + '">' +
+          escapeHtml(column.label) + indicator +
+          '<span class="column-resizer" data-resize-stock="' +
+          escapeHtml(column.key) + '"></span></th>';
       }).join("") +
       '<th class="columns-button" data-action="show-columns" title="Sütunları seç">+</th>';
 
@@ -572,7 +717,9 @@
         '<td class="select-cell" data-checkbox-item="' + escapeHtml(item.id) + '">' +
         '<input type="checkbox"' + (ui.checkedIds.has(item.id) ? " checked" : "") + '></td>' +
         columns.map(function (column) {
-          return "<td title=\"" + escapeHtml(item[column.key]) + "\">" +
+          return '<td data-stock-column="' + escapeHtml(column.key) + '" style="' +
+            columnWidthStyle("stock", column.key) + '" title="' +
+            escapeHtml(item[column.key]) + '">' +
             escapeHtml(item[column.key]) + "</td>";
         }).join("") + "</tr>";
     }).join("");
@@ -769,6 +916,17 @@
   function syncMovementForm() {
     const user = currentUser();
     const targets = movementTargetItems();
+    const entryOption = Array.from($("movement-type").options).find(function (option) {
+      return option.value === "Giriş";
+    });
+    const entryAllowed = currentUserIsAdmin();
+    if (entryOption) {
+      entryOption.hidden = !entryAllowed;
+      entryOption.disabled = !entryAllowed;
+    }
+    if (!entryAllowed && $("movement-type").value === "Giriş") {
+      $("movement-type").value = "Çıkış";
+    }
     $("movement-user").textContent = user ? user.name : "";
     $("movement-selection").textContent = targets.length
       ? (targets.length === 1 ? targets[0].name : targets.length + " malzeme seçili")
@@ -788,6 +946,12 @@
     const note = $("movement-note").value.trim();
     const user = currentUser();
 
+    if (type === "Giriş" && !currentUserIsAdmin()) {
+      showToast("Üyeler yalnızca stok çıkışı yapabilir.", true);
+      $("movement-type").value = "Çıkış";
+      syncMovementForm();
+      return;
+    }
     if (!active || !targets.length) {
       showToast("İşlem yapılacak malzemeyi seçin.", true);
       return;
@@ -842,8 +1006,14 @@
     const isAdministrator = currentUserIsAdmin();
     const mayManage = Boolean(active && isAdministrator);
     const stockTab = document.querySelector('[data-right-tab="stock-card"]');
+    const usersTab = document.querySelector('[data-left-tab="users"]');
+    const usersMenuItem = document.querySelector('[data-action="show-panel-users"]');
     if (stockTab) stockTab.hidden = !isAdministrator;
+    if (usersTab) usersTab.hidden = !isAdministrator;
+    if (usersMenuItem) usersMenuItem.hidden = !isAdministrator;
     if (window.DepoDock) window.DepoDock.setPanelAllowed("stock-card", isAdministrator);
+    if (window.DepoDock) window.DepoDock.setPanelAllowed("users", isAdministrator);
+    if (!isAdministrator && ui.leftTab === "users") setLeftTab("lists");
     if (!mayManage && ui.rightTab === "stock-card") setRightTab("movement");
     document.querySelectorAll('[data-action="new-card"], [data-action="delete-card"]').forEach(function (button) {
       button.disabled = !mayManage;
@@ -858,14 +1028,62 @@
   // Hareket geçmişi
   // ---------------------------------------------------------------------------
 
+  function historyItemName(log) {
+    if (log.itemName) return log.itemName;
+    const table = tableById(log.tableId);
+    if (!table) return "";
+    const item = table.items.find(function (entry) { return entry.id === log.itemId; });
+    return item ? item.name : "";
+  }
+
+  function historyTimestamp(dateText) {
+    const match = String(dateText || "").match(
+      /^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/
+    );
+    if (!match) return 0;
+    return new Date(
+      Number(match[3]),
+      Number(match[2]) - 1,
+      Number(match[1]),
+      Number(match[4]),
+      Number(match[5]),
+      Number(match[6] || 0)
+    ).getTime();
+  }
+
   function historyRows() {
     const active = activeTableReference();
     const scope = $("history-scope").value;
+    const query = normalizeText($("history-search").value);
     return state.logs.filter(function (log) {
-      if (scope === "all") return true;
-      if (scope === "item") return active && ui.activeItemId &&
+      let inScope;
+      if (scope === "all") inScope = true;
+      else if (scope === "item") inScope = active && ui.activeItemId &&
         log.tableId === active.table.id && log.itemId === ui.activeItemId;
-      return active && log.tableId === active.table.id;
+      else inScope = active && log.tableId === active.table.id;
+      if (!inScope) return false;
+      if (!query) return true;
+
+      return [
+        log.date,
+        historyItemName(log),
+        log.type,
+        log.quantity,
+        log.purpose,
+        log.user,
+        log.note,
+        log.before,
+        log.after
+      ].some(function (value) {
+        return normalizeText(value).includes(query);
+      });
+    }).map(function (log, index) {
+      return { log: log, index: index };
+    }).sort(function (left, right) {
+      const dateDifference = historyTimestamp(right.log.date) - historyTimestamp(left.log.date);
+      return dateDifference || left.index - right.index;
+    }).map(function (entry) {
+      return entry.log;
     });
   }
 
@@ -875,16 +1093,27 @@
       ? $("history-scope").selectedOptions[0].textContent
       : "Aktif tablo";
     $("history-context").textContent = scopeText + " / " + rows.length + " hareket";
+    document.querySelectorAll("[data-history-column]").forEach(function (cell) {
+      const key = cell.dataset.historyColumn;
+      cell.style.cssText = columnWidthStyle("history", key);
+    });
     $("history-table-body").innerHTML = rows.map(function (log) {
+      const itemName = historyItemName(log);
+      function cell(key, value) {
+        return '<td data-history-column="' + key + '" style="' +
+          columnWidthStyle("history", key) + '" title="' + escapeHtml(value) + '">' +
+          escapeHtml(value) + "</td>";
+      }
       return "<tr>" +
-        "<td>" + escapeHtml(log.date) + "</td>" +
-        "<td>" + escapeHtml(log.type) + "</td>" +
-        "<td>" + escapeHtml(log.quantity) + "</td>" +
-        "<td>" + escapeHtml(log.purpose) + "</td>" +
-        "<td>" + escapeHtml(log.user) + "</td>" +
-        "<td>" + escapeHtml(log.note) + "</td>" +
-        "<td>" + escapeHtml(log.before) + "</td>" +
-        "<td>" + escapeHtml(log.after) + "</td>" +
+        cell("date", log.date) +
+        cell("itemName", itemName) +
+        cell("type", log.type) +
+        cell("quantity", log.quantity) +
+        cell("purpose", log.purpose) +
+        cell("user", log.user) +
+        cell("note", log.note) +
+        cell("before", log.before) +
+        cell("after", log.after) +
         "</tr>";
     }).join("");
   }
@@ -906,8 +1135,12 @@
     $("form-modal-error").hidden = true;
     $("form-modal-fields").innerHTML = fields.map(function (field) {
       return '<label>' + escapeHtml(field.label) +
-        '<input class="control" autocomplete="off" name="' + escapeHtml(field.name) + '" value="' +
-        escapeHtml(field.value || "") + '"' + (field.required ? " required" : "") + "></label>";
+        '<input class="control" type="' + escapeHtml(field.type || "text") +
+        '" autocomplete="' + escapeHtml(field.autocomplete || "off") +
+        '" name="' + escapeHtml(field.name) + '" value="' +
+        escapeHtml(field.value || "") + '" placeholder="' +
+        escapeHtml(field.placeholder || "") + '"' +
+        (field.required ? " required" : "") + "></label>";
     }).join("");
     ui.formModalSubmit = options.onSubmit;
     ui.formModalBusy = false;
@@ -1298,6 +1531,55 @@
   // Panel boyutları
   // ---------------------------------------------------------------------------
 
+  function startColumnResize(group, key, event) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    ensureColumnWidthSettings();
+    const header = event.target.closest("th");
+    const startX = event.clientX;
+    const startWidth = header ? header.getBoundingClientRect().width : savedColumnWidth(group, key);
+    const widths = group === "history"
+      ? state.settings.historyColumnWidths
+      : state.settings.columnWidths;
+    const attribute = group === "history" ? "data-history-column" : "data-stock-column";
+    const wasDraggable = header ? header.draggable : false;
+
+    ui.isResizingColumn = true;
+    ui.suppressColumnClick = true;
+    if (header) header.draggable = false;
+    document.body.classList.add("is-resizing-column");
+
+    function applyWidth(width) {
+      widths[key] = Math.max(55, Math.min(600, Math.round(width)));
+      document.querySelectorAll("[" + attribute + '="' + key + '"]').forEach(function (cell) {
+        cell.style.width = widths[key] + "px";
+        cell.style.minWidth = widths[key] + "px";
+        cell.style.maxWidth = widths[key] + "px";
+      });
+    }
+
+    function move(moveEvent) {
+      applyWidth(startWidth + moveEvent.clientX - startX);
+    }
+
+    function stop() {
+      ui.isResizingColumn = false;
+      if (header) header.draggable = wasDraggable;
+      document.body.classList.remove("is-resizing-column");
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", stop);
+      saveState();
+      window.setTimeout(function () {
+        ui.suppressColumnClick = false;
+      }, 0);
+    }
+
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", stop);
+  }
+
   function startResize(kind, event) {
     event.preventDefault();
     const splitter = event.currentTarget;
@@ -1356,6 +1638,9 @@
       "export-json": exportJson,
       "export-csv": exportActiveTableCsv,
       "open-bom": openBom,
+      "edit-account": editCurrentAccount,
+      "change-password": changeCurrentPassword,
+      "sign-out": signOut,
       "new-card": startNewCard,
       "delete-card": deleteSelectedCards,
       "clear-selection": function () {
@@ -1368,6 +1653,7 @@
         ui.activeItemId = null;
         ui.formItemId = null;
         $("stock-search").value = "";
+        $("history-search").value = "";
         $("critical-only").checked = false;
         renderAll(true);
         showToast("Görünüm yenilendi.");
@@ -1387,7 +1673,9 @@
         $("columns-modal").hidden = false;
       },
       "show-panel-lists": function () { window.DepoDock.togglePanel("lists"); },
-      "show-panel-users": function () { window.DepoDock.togglePanel("users"); },
+      "show-panel-users": function () {
+        if (currentUserIsAdmin()) window.DepoDock.togglePanel("users");
+      },
       "show-panel-stock": function () { window.DepoDock.togglePanel("stock"); },
       "show-panel-stock-card": function () {
         if (currentUserIsAdmin()) window.DepoDock.togglePanel("stock-card");
@@ -1420,9 +1708,12 @@
       "reset-columns": function () {
         state.settings.visibleColumns = window.DepoData.columnDefinitions.map(function (column) { return column.key; });
         state.settings.columnOrder = state.settings.visibleColumns.slice();
+        state.settings.columnWidths = Object.assign({}, defaultColumnWidths);
+        state.settings.historyColumnWidths = Object.assign({}, defaultHistoryColumnWidths);
         saveState();
         renderColumnsModal();
         renderStockTable();
+        renderHistory();
       },
       "close-bom": function () { $("bom-modal").hidden = true; },
       "load-bom": function () { $("bom-file-input").click(); },
@@ -1463,10 +1754,9 @@
   $("json-file-button").addEventListener("click", function () {
     showToast("Veriler Firebase Realtime Database ile ortak kullanılıyor.");
   });
-  $("current-user-button").addEventListener("click", signOut);
-
   document.querySelectorAll("[data-left-tab]").forEach(function (button) {
     button.addEventListener("click", function () {
+      if (button.dataset.leftTab === "users" && !currentUserIsAdmin()) return;
       setLeftTab(button.dataset.leftTab);
     });
   });
@@ -1514,6 +1804,7 @@
   $("stock-search").addEventListener("input", renderStockTable);
   $("critical-only").addEventListener("change", renderStockTable);
   $("stock-table-head").addEventListener("click", function (event) {
+    if (ui.suppressColumnClick || event.target.closest(".column-resizer")) return;
     if (event.target.closest("[data-action]")) return;
     const heading = event.target.closest("th[data-key]");
     if (!heading) return;
@@ -1534,6 +1825,10 @@
   });
 
   $("stock-table-head").addEventListener("dragstart", function (event) {
+    if (ui.isResizingColumn || event.target.closest(".column-resizer")) {
+      event.preventDefault();
+      return;
+    }
     const heading = event.target.closest('th[draggable="true"]');
     if (!heading) return;
     ui.draggedColumn = heading.dataset.key;
@@ -1593,6 +1888,15 @@
   $("movement-panel").addEventListener("submit", processMovement);
   $("movement-type").addEventListener("change", syncMovementForm);
   $("history-scope").addEventListener("change", renderHistory);
+  $("history-search").addEventListener("input", renderHistory);
+  $("stock-table-head").addEventListener("pointerdown", function (event) {
+    const handle = event.target.closest("[data-resize-stock]");
+    if (handle) startColumnResize("stock", handle.dataset.resizeStock, event);
+  });
+  document.querySelector(".history-table thead").addEventListener("pointerdown", function (event) {
+    const handle = event.target.closest("[data-resize-history]");
+    if (handle) startColumnResize("history", handle.dataset.resizeHistory, event);
+  });
 
   $("form-modal-form").addEventListener("submit", async function (event) {
     event.preventDefault();

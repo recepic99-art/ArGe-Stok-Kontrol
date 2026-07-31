@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title>Ar-Ge Numune Depo - Web Demo</title>
   <link rel="stylesheet" href="assets/vendor/dockview/dockview.css?v=7.0.3">
-  <link rel="stylesheet" href="assets/css/app.css?v=bugfix-10">
+  <link rel="stylesheet" href="assets/css/app.css?v=feature-11">
 </head>
 <body>
   <div id="app" class="app-shell" aria-hidden="true">
@@ -62,7 +62,16 @@
       </div>
       <div class="header-actions">
         <button id="json-file-button" class="button button-muted" title="JSON veri dosyası"></button>
-        <button id="current-user-button" class="button button-muted" title="Oturum bilgileri"></button>
+        <div class="menu-group account-menu-group">
+          <button id="current-user-button" class="button button-muted menu-trigger"
+                  data-menu="user-menu" title="Hesap işlemleri"></button>
+          <div id="user-menu" class="menu-popover account-menu" hidden>
+            <button data-action="edit-account">Hesap bilgilerini düzenle</button>
+            <button data-action="change-password">Şifreyi değiştir</button>
+            <div class="menu-separator"></div>
+            <button class="context-danger" data-action="sign-out">Oturumu kapat</button>
+          </div>
+        </div>
         <button class="button button-muted" data-action="export-json">Yedekle</button>
         <button class="button button-primary" data-action="refresh">Yenile</button>
       </div>
@@ -99,7 +108,7 @@
           </div>
           <div id="user-list" class="user-list"></div>
           <p class="permission-note muted">
-            Yöneticiler listeleri ve stok kartlarını yönetebilir. Üyeler giriş/çıkış yapabilir.
+            Yöneticiler listeleri ve stok kartlarını yönetebilir. Üyeler yalnızca stok çıkışı yapabilir.
           </p>
         </section>
       </aside>
@@ -117,7 +126,6 @@
             <input id="stock-search" type="search" placeholder="Malzeme adı, ID, kategori, açıklama ara">
           </label>
           <label class="check-label"><input id="critical-only" type="checkbox"> Kritik altı</label>
-          <button class="button button-primary compact" data-action="refresh">Yenile</button>
         </div>
         <div id="open-table-tabs" class="open-table-tabs"></div>
         <div id="empty-table-state" class="empty-state" hidden>
@@ -200,6 +208,10 @@
               <h2>Hareket Geçmişi</h2>
               <p id="history-context" class="muted">Aktif tablo</p>
             </div>
+            <label class="search-field history-search">
+              <span class="search-icon" aria-hidden="true"></span>
+              <input id="history-search" type="search" placeholder="Hareketlerde ara">
+            </label>
             <select id="history-scope" class="small-select" title="Geçmiş kapsamı">
               <option value="table">Aktif tablo</option>
               <option value="item">Seçili malzeme</option>
@@ -210,14 +222,15 @@
             <table class="data-table history-table">
               <thead>
                 <tr>
-                  <th>Tarih Saat</th>
-                  <th>İşlem</th>
-                  <th>Miktar</th>
-                  <th>Kullanım Amacı/Proje</th>
-                  <th>Alan/Veren</th>
-                  <th>Açıklama</th>
-                  <th>Önceki</th>
-                  <th>Yeni</th>
+                  <th data-history-column="date">Tarih Saat<span class="column-resizer" data-resize-history="date"></span></th>
+                  <th data-history-column="itemName">Malzeme Adı<span class="column-resizer" data-resize-history="itemName"></span></th>
+                  <th data-history-column="type">İşlem<span class="column-resizer" data-resize-history="type"></span></th>
+                  <th data-history-column="quantity">Miktar<span class="column-resizer" data-resize-history="quantity"></span></th>
+                  <th data-history-column="purpose">Kullanım Amacı/Proje<span class="column-resizer" data-resize-history="purpose"></span></th>
+                  <th data-history-column="user">Alan/Veren<span class="column-resizer" data-resize-history="user"></span></th>
+                  <th data-history-column="note">Açıklama<span class="column-resizer" data-resize-history="note"></span></th>
+                  <th data-history-column="before">Önceki<span class="column-resizer" data-resize-history="before"></span></th>
+                  <th data-history-column="after">Yeni<span class="column-resizer" data-resize-history="after"></span></th>
                 </tr>
               </thead>
               <tbody id="history-table-body"></tbody>
@@ -338,9 +351,9 @@
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
   <script src="assets/js/firebase-config.js?v=firebase-4"></script>
-  <script src="firebase-store-v4.js?v=10"></script>
+  <script src="firebase-store-v4.js?v=11"></script>
   <script src="assets/vendor/dockview/dockview.min.js?v=7.0.3"></script>
   <script src="assets/js/dock-layout.js?v=6"></script>
-  <script src="assets/js/app.js?v=bugfix-13"></script>
+  <script src="assets/js/app.js?v=feature-14"></script>
 </body>
 </html>

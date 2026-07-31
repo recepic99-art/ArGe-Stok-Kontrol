@@ -46,7 +46,30 @@
         leftCollapsed: false,
         rightCollapsed: false,
         visibleColumns: columns.slice(),
-        columnOrder: columns.slice()
+        columnOrder: columns.slice(),
+        columnWidths: {
+          id: 100,
+          name: 180,
+          category: 150,
+          footprint: 100,
+          box: 90,
+          quantity: 90,
+          unit: 85,
+          critical: 110,
+          description: 230,
+          updatedAt: 145
+        },
+        historyColumnWidths: {
+          date: 145,
+          itemName: 180,
+          type: 80,
+          quantity: 75,
+          purpose: 210,
+          user: 120,
+          note: 180,
+          before: 75,
+          after: 75
+        }
       }
     };
   }

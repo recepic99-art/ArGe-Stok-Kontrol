@@ -118,6 +118,16 @@
       localUi.settings || {},
       normalized.settings || {}
     );
+    normalized.settings.columnWidths = Object.assign(
+      {},
+      defaults.settings.columnWidths || {},
+      normalized.settings.columnWidths || {}
+    );
+    normalized.settings.historyColumnWidths = Object.assign(
+      {},
+      defaults.settings.historyColumnWidths || {},
+      normalized.settings.historyColumnWidths || {}
+    );
     if (!Array.isArray(normalized.session.openTableIds)) {
       normalized.session.openTableIds = [];
     }
@@ -481,6 +491,12 @@
     if (code.includes("weak-password")) {
       return "Şifre en az 6 karakter olmalıdır.";
     }
+    if (code.includes("requires-recent-login")) {
+      return "Güvenlik için mevcut şifrenizle yeniden doğrulama yapın.";
+    }
+    if (code.includes("invalid-email")) {
+      return "Geçerli bir kullanıcı adı yazın.";
+    }
     if (code.includes("operation-not-allowed")) {
       return "Firebase'de E-posta/Şifre girişi henüz etkinleştirilmemiş.";
     }
@@ -604,6 +620,66 @@
     await auth.signOut();
   }
 
+  async function reauthenticateCurrentUser(password) {
+    if (!auth || !auth.currentUser) {
+      throw new Error("Hesap işlemi için giriş yapmalısınız.");
+    }
+    if (!password) {
+      throw new Error("Bu değişiklik için mevcut şifrenizi yazın.");
+    }
+    const credential = window.firebase.auth.EmailAuthProvider.credential(
+      auth.currentUser.email,
+      password
+    );
+    await auth.currentUser.reauthenticateWithCredential(credential);
+  }
+
+  async function updateCurrentUserProfile(changes) {
+    if (!auth || !auth.currentUser) {
+      throw new Error("Hesap bilgilerini değiştirmek için giriş yapmalısınız.");
+    }
+
+    const uid = auth.currentUser.uid;
+    const snapshot = await usersReference.child(uid).once("value");
+    const current = snapshot.val();
+    if (!current) throw new Error("Kullanıcı kaydı bulunamadı.");
+
+    const username = String(changes.username || "").trim();
+    const name = String(changes.name || "").trim();
+    if (!normalizeUsername(username)) throw new Error("Geçerli bir kullanıcı adı yazın.");
+    if (!name) throw new Error("Ad soyad alanı zorunludur.");
+
+    const usernameChanged =
+      normalizeUsername(username) !== normalizeUsername(current.username);
+    if (usernameChanged) {
+      await reauthenticateCurrentUser(changes.currentPassword);
+      await auth.currentUser.updateEmail(usernameEmail(username));
+    }
+    if (name !== current.name) {
+      await auth.currentUser.updateProfile({ displayName: name });
+    }
+
+    const updated = {
+      id: current.id || "user-" + uid,
+      authUid: uid,
+      username: username,
+      name: name
+    };
+    await usersReference.child(uid).set(updated);
+    updated.role = (await rolesReference.child(uid).once("value")).val() === "admin"
+      ? "admin"
+      : "member";
+    return updated;
+  }
+
+  async function changeCurrentUserPassword(currentPassword, newPassword) {
+    if (String(newPassword || "").length < 6) {
+      throw new Error("Yeni şifre en az 6 karakter olmalıdır.");
+    }
+    await reauthenticateCurrentUser(currentPassword);
+    await auth.currentUser.updatePassword(newPassword);
+  }
+
   function watch(onChange) {
     if (stopWatching) stopWatching();
     watchCallback = onChange;
@@ -691,6 +767,8 @@
     signIn: signIn,
     register: register,
     signOut: signOut,
+    updateCurrentUserProfile: updateCurrentUserProfile,
+    changeCurrentUserPassword: changeCurrentUserPassword,
     watch: watch,
     setUserRole: setUserRole,
     replace: replace,
