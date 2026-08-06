@@ -3,7 +3,6 @@
 
   // Firebase ortak veri katmanı - v7.
   const LOCAL_UI_KEY = "arge-numune-depo-ui-v1";
-  const BROWSER_SESSION_COOKIE = "arge_numune_depo_browser_session";
   const CLOUD_PATH = "appState";
   const SCHEMA_VERSION = 5;
 
@@ -20,22 +19,6 @@
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
-  }
-
-  // Bu oturum cerezinin son kullanma tarihi yoktur. Sayfa yenilemelerinde ve
-  // ayni tarayicidaki sekmelerde kalir, tarayici tamamen kapaninca silinir.
-  function hasBrowserSession() {
-    return document.cookie.split(";").some(function (part) {
-      return part.trim().startsWith(BROWSER_SESSION_COOKIE + "=");
-    });
-  }
-
-  function beginBrowserSession() {
-    document.cookie = BROWSER_SESSION_COOKIE + "=1; Path=/; SameSite=Lax";
-  }
-
-  function endBrowserSession() {
-    document.cookie = BROWSER_SESSION_COOKIE + "=; Max-Age=0; Path=/; SameSite=Lax";
   }
 
   function toArray(value) {
@@ -539,6 +522,13 @@
     });
   }
 
+  function pageWasReloaded() {
+    const navigation = window.performance &&
+      window.performance.getEntriesByType &&
+      window.performance.getEntriesByType("navigation")[0];
+    return Boolean(navigation && navigation.type === "reload");
+  }
+
   // Firebase tarayicida oturumu saklar. Sayfa yenilendiginde bu kimligi ortak
   // kullanici kaydi ve guncel yetkiyle yeniden birlestiririz.
   async function restoreAuthenticatedSession(firebaseUser) {
@@ -581,17 +571,18 @@
     usersReference = cloudReference.child("userDirectory");
     rolesReference = cloudReference.child("rolesByUid");
 
-    // Firebase kimligi sekmeler arasinda paylasilir. Ayrica oturum cerezini
-    // kontrol ederek tarayici tamamen kapatildiktan sonra yeniden sifre isteriz.
-    await auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
+    // SESSION kaliciligi sayfa yenilemesinde kimligi korur. Tarayici oturumu
+    // sona erdiginde Firebase kimligi otomatik olarak temizlenir.
+    await auth.setPersistence(window.firebase.auth.Auth.Persistence.SESSION);
     const firebaseUser = await waitForInitialAuthState();
-    if (firebaseUser && hasBrowserSession()) {
-      return restoreAuthenticatedSession(firebaseUser);
+    if (firebaseUser) {
+      // Chrome kapatilan sekmeleri geri yuklerken sessionStorage verisini de
+      // geri getirebilir. Yalnizca gercek F5 yenilemesinde oturumu surdururuz.
+      if (pageWasReloaded()) return restoreAuthenticatedSession(firebaseUser);
+      await auth.signOut();
     }
-    if (firebaseUser) await auth.signOut();
 
-    // Giris yokken yalnizca yerel gorunum ayarlari hazirlanir. Eski bir kullanici
-    // kimligi kalmissa uygulamanin yanlislikla acik baslamamasi icin temizlenir.
+    // Giris yokken yalnizca yerel gorunum ayarlari hazirlanir.
     const initialState = normalizeState(window.DepoData.createInitialState());
     initialState.session.currentUserId = null;
     return initialState;
@@ -644,7 +635,6 @@
       loaded.session.currentUserId = user.id;
       await writeCurrentUser(user);
       writeLocalUi(loaded);
-      beginBrowserSession();
       return loaded;
     } catch (error) {
       throw new Error(firebaseErrorMessage(error));
@@ -679,7 +669,6 @@
       loaded.session.currentUserId = user.id;
       await writeCurrentUser(user);
       writeLocalUi(loaded);
-      beginBrowserSession();
       return loaded;
     } catch (error) {
       if (error.message && !error.code) throw error;
@@ -693,7 +682,6 @@
       stopWatching = null;
     }
     await auth.signOut();
-    endBrowserSession();
   }
 
   async function reauthenticateCurrentUser(password) {

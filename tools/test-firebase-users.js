@@ -115,21 +115,15 @@ function createReference(referencePath) {
   };
 }
 
-function createClient() {
+function createClient(navigationType) {
   const localValues = new Map();
-  let browserCookie = "";
   const document = {};
-  Object.defineProperty(document, "cookie", {
-    get: function () {
-      return browserCookie;
-    },
-    set: function (value) {
-      browserCookie = /Max-Age=0/i.test(value) ? "" : value.split(";")[0];
-    }
-  });
+  let persistence = "";
   const auth = {
     currentUser: null,
-    async setPersistence() {},
+    async setPersistence(value) {
+      persistence = value;
+    },
     onAuthStateChanged(listener) {
       Promise.resolve().then(function () {
         listener(auth.currentUser);
@@ -163,7 +157,7 @@ function createClient() {
   }
   firebaseAuth.Auth = {
     Persistence: {
-      LOCAL: "LOCAL"
+      SESSION: "SESSION"
     }
   };
 
@@ -211,6 +205,11 @@ function createClient() {
         localValues.set(key, value);
       }
     },
+    performance: {
+      getEntriesByType: function () {
+        return [{ type: navigationType || "navigate" }];
+      }
+    },
     dispatchEvent() {}
   };
 
@@ -220,6 +219,9 @@ function createClient() {
     console: console,
     CustomEvent: class CustomEvent {}
   });
+  window.DepoStore.testPersistence = function () {
+    return persistence;
+  };
   return window.DepoStore;
 }
 
@@ -230,6 +232,19 @@ function authenticatedUsers(state) {
 }
 
 (async function () {
+  const refreshedSessionClient = createClient("reload");
+  await refreshedSessionClient.initialize();
+  await refreshedSessionClient.signIn("recepic", "demo123");
+  const refreshedSessionState = await refreshedSessionClient.initialize();
+  assert.equal(refreshedSessionClient.testPersistence(), "SESSION");
+  assert.equal(refreshedSessionState.session.currentUserId, "user-uid-recepic");
+
+  const reopenedBrowserClient = createClient("navigate");
+  await reopenedBrowserClient.initialize();
+  await reopenedBrowserClient.signIn("recepic", "demo123");
+  const reopenedBrowserState = await reopenedBrowserClient.initialize();
+  assert.equal(reopenedBrowserState.session.currentUserId, null);
+
   const administratorClient = createClient();
   await administratorClient.initialize();
   const administratorState = await administratorClient.register(
