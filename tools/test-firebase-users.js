@@ -117,8 +117,25 @@ function createReference(referencePath) {
 
 function createClient() {
   const localValues = new Map();
+  let browserCookie = "";
+  const document = {};
+  Object.defineProperty(document, "cookie", {
+    get: function () {
+      return browserCookie;
+    },
+    set: function (value) {
+      browserCookie = /Max-Age=0/i.test(value) ? "" : value.split(";")[0];
+    }
+  });
   const auth = {
     currentUser: null,
+    async setPersistence() {},
+    onAuthStateChanged(listener) {
+      Promise.resolve().then(function () {
+        listener(auth.currentUser);
+      });
+      return function () {};
+    },
     async signInWithEmailAndPassword(email) {
       const account = accounts[email];
       if (!account) throw new Error("Kullanıcı bulunamadı.");
@@ -141,15 +158,22 @@ function createClient() {
     }
   };
 
+  function firebaseAuth() {
+    return auth;
+  }
+  firebaseAuth.Auth = {
+    Persistence: {
+      LOCAL: "LOCAL"
+    }
+  };
+
   const window = {
     firebase: {
       apps: [],
       initializeApp() {
         this.apps.push({});
       },
-      auth: function () {
-        return auth;
-      },
+      auth: firebaseAuth,
       database: function () {
         return {
           ref: function (referencePath) {
@@ -192,6 +216,7 @@ function createClient() {
 
   vm.runInNewContext(storeSource, {
     window: window,
+    document: document,
     console: console,
     CustomEvent: class CustomEvent {}
   });

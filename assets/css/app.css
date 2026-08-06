@@ -91,7 +91,8 @@ button {
 
 .menu-bar {
   position: relative;
-  z-index: 50;
+  /* Klasik menuler baslik ve tum dock panellerinin uzerinde acilir. */
+  z-index: 1400;
   display: flex;
   align-items: stretch;
   padding: 0 8px;
@@ -1225,6 +1226,41 @@ body.is-resizing-column * {
 .auth-form-area h2 {
   margin: 0;
   font-size: 28px;
+}
+
+.auth-loading {
+  display: flex;
+  min-height: 190px;
+  align-items: center;
+  gap: 14px;
+  color: var(--text);
+}
+
+.auth-loading strong,
+.auth-loading span {
+  display: block;
+}
+
+.auth-loading div > span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.loading-spinner {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: loading-spin 700ms linear infinite;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .auth-tabs {

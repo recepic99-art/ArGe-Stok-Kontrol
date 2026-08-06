@@ -225,6 +225,21 @@
     $("auth-error").hidden = false;
   }
 
+  function showAuthLoading() {
+    $("auth-title").textContent = "Bağlantı kuruluyor";
+    $("auth-subtitle").textContent = "Oturumunuz kontrol ediliyor";
+    $("auth-loading").hidden = false;
+    $("auth-controls").hidden = true;
+    $("auth-error").hidden = true;
+  }
+
+  function showAuthControls() {
+    $("auth-title").textContent = "Hoş geldiniz";
+    $("auth-subtitle").textContent = "Hesabınızla devam edin";
+    $("auth-loading").hidden = true;
+    $("auth-controls").hidden = false;
+  }
+
   function updateFileStatus() {
     const fileName = window.DepoStore.fileName();
     $("auth-json-status").textContent = fileName || "Dosya seçilmedi";
@@ -310,6 +325,7 @@
         $("auth-overlay").hidden = false;
         $("auth-password").value = "";
         setAuthMode("login");
+        showAuthControls();
         return true;
       }
     });
@@ -1997,6 +2013,7 @@
     showToast(event.detail || "Firebase ortak verisine yazılamadı.", true);
   });
 
+  showAuthLoading();
   window.DepoDock.initialize();
 
   try {
@@ -2009,9 +2026,12 @@
     $("auth-json-status").textContent = "Firebase ortak veri";
     if (state.session.currentUserId) {
       openApplication();
+    } else {
+      showAuthControls();
     }
   } catch (error) {
     $("auth-json-status").textContent = "Firebase bağlantı hatası";
+    showAuthControls();
     showAuthError(friendlyErrorMessage(error, "Firebase başlatılamadı."));
   }
 }());

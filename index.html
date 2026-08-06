@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title>Ar-Ge Numune Depo - Web Demo</title>
   <link rel="stylesheet" href="assets/vendor/dockview/dockview.css?v=7.0.3">
-  <link rel="stylesheet" href="assets/css/app.css?v=session-16">
+  <link rel="stylesheet" href="assets/css/app.css?v=session-17">
 </head>
 <body>
   <div id="app" class="app-shell" aria-hidden="true">
@@ -253,25 +253,34 @@
       </div>
       <div class="auth-form-area">
         <h2 id="auth-title">Hoş geldiniz</h2>
-        <p class="muted">Hesabınızla devam edin</p>
+        <p id="auth-subtitle" class="muted">Hesabınızla devam edin</p>
         <div class="json-file-setup">
           <div>
             <span>Ortak veri kaynağı</span>
             <strong id="auth-json-status">Firebase bağlantısı hazırlanıyor</strong>
           </div>
         </div>
-        <div class="auth-tabs">
-          <button class="auth-tab is-active" data-auth-mode="login">Giriş Yap</button>
-          <button class="auth-tab" data-auth-mode="register">Kaydol</button>
+        <div id="auth-loading" class="auth-loading" role="status">
+          <span class="loading-spinner" aria-hidden="true"></span>
+          <div>
+            <strong>Oturum kontrol ediliyor</strong>
+            <span>Firebase bağlantısı hazırlanıyor</span>
+          </div>
         </div>
-        <form id="auth-form" autocomplete="off">
-          <label id="auth-name-field" hidden>Ad Soyad<input id="auth-name" class="control" autocomplete="off"></label>
-          <label>Kullanıcı adı<input id="auth-username" class="control" autocomplete="off"></label>
-          <label>Şifre<input id="auth-password" class="control" type="password" autocomplete="off"></label>
-          <label class="check-label"><input id="show-password" type="checkbox"> Şifreyi göster</label>
-          <div id="auth-error" class="inline-error" hidden></div>
-          <button id="auth-submit" class="button button-primary auth-submit" type="submit">Giriş Yap</button>
-        </form>
+        <div id="auth-controls" hidden>
+          <div class="auth-tabs">
+            <button class="auth-tab is-active" data-auth-mode="login">Giriş Yap</button>
+            <button class="auth-tab" data-auth-mode="register">Kaydol</button>
+          </div>
+          <form id="auth-form" autocomplete="off">
+            <label id="auth-name-field" hidden>Ad Soyad<input id="auth-name" class="control" autocomplete="off"></label>
+            <label>Kullanıcı adı<input id="auth-username" class="control" autocomplete="off"></label>
+            <label>Şifre<input id="auth-password" class="control" type="password" autocomplete="off"></label>
+            <label class="check-label"><input id="show-password" type="checkbox"> Şifreyi göster</label>
+            <div id="auth-error" class="inline-error" hidden></div>
+            <button id="auth-submit" class="button button-primary auth-submit" type="submit">Giriş Yap</button>
+          </form>
+        </div>
       </div>
     </section>
   </div>
@@ -351,9 +360,9 @@
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
   <script src="assets/js/firebase-config.js?v=firebase-4"></script>
-  <script src="firebase-store-v4.js?v=12"></script>
+  <script src="firebase-store-v4.js?v=13"></script>
   <script src="assets/vendor/dockview/dockview.min.js?v=7.0.3"></script>
   <script src="assets/js/dock-layout.js?v=6"></script>
-  <script src="assets/js/app.js?v=session-15"></script>
+  <script src="assets/js/app.js?v=session-17"></script>
 </body>
 </html>
