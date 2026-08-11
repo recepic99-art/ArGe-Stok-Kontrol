@@ -134,6 +134,12 @@
     input.addEventListener("focus", function () {
       combo.selectedValue = input.value;
     });
+    // Metin kutusuna normal tıklamak da oku kullanmakla aynı şekilde listeyi açar.
+    // Önceden liste yalnızca yazı yazıldıktan sonra güvenilir biçimde açılıyordu.
+    input.addEventListener("click", function () {
+      if (activeCombo !== combo) open(combo, true);
+      else render();
+    });
     input.addEventListener("input", function () {
       if (activeCombo !== combo) open(combo, true);
       else render();
@@ -160,6 +166,11 @@
       window.setTimeout(function () {
         if (activeCombo === combo && !popover.matches(":hover")) close(true);
       }, 120);
+    });
+    // Ok düğmesine basılırken odağın önce düğmeye geçmesi, input'un blur olayıyla
+    // açılan listenin hemen kapanmasına yol açmamalıdır.
+    toggle.addEventListener("mousedown", function (event) {
+      event.preventDefault();
     });
     toggle.addEventListener("click", function () {
       if (activeCombo === combo) close(true);

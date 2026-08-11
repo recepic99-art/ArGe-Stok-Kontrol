@@ -21,8 +21,10 @@
     draggedColumn: null,
     isResizingColumn: false,
     suppressColumnClick: false,
+    definitionView: "categories",
     definitionCategoryId: "",
-    definitionDraftFootprints: new Set()
+    definitionDraftFootprints: new Set(),
+    definitionFootprint: ""
   };
 
   let categoryCombo = null;
@@ -1381,6 +1383,21 @@
     $("definition-error").hidden = !message;
   }
 
+  function setDefinitionView(view) {
+    ui.definitionView = view === "footprints" ? "footprints" : "categories";
+    const categoryView = ui.definitionView === "categories";
+    $("definitions-category-pane").hidden = !categoryView;
+    $("definitions-footprint-pane").hidden = categoryView;
+    $("definitions-category-tab").classList.toggle("is-active", categoryView);
+    $("definitions-footprint-tab").classList.toggle("is-active", !categoryView);
+    if (!categoryView) renderGlobalFootprintList();
+  }
+
+  function renderDefinitionTabCounts() {
+    $("definitions-category-tab").textContent = "Kategoriler (" + categoryDefinitions().length + ")";
+    $("definitions-footprint-tab").textContent = "Kılıflar (" + allDefinedFootprints().length + ")";
+  }
+
   function renderDefinitionCategoryList() {
     const query = normalizeText($("definition-search").value);
     $("definition-category-list").innerHTML = categoryDefinitions().filter(function (category) {
@@ -1436,14 +1453,20 @@
     state.definitions = window.DepoCatalog.normalizeDefinitions(state.definitions, state.tables);
     $("definitions-modal").hidden = false;
     $("definition-search").value = "";
+    $("global-footprint-search").value = "";
     const first = categoryDefinitions()[0];
+    renderDefinitionTabCounts();
     loadDefinitionEditor(first ? first.id : "");
+    const firstFootprint = allDefinedFootprints()[0] || "";
+    loadGlobalFootprintEditor(firstFootprint);
+    setDefinitionView("categories");
   }
 
   function closeDefinitions() {
     $("definitions-modal").hidden = true;
     ui.definitionCategoryId = "";
     ui.definitionDraftFootprints.clear();
+    ui.definitionFootprint = "";
   }
 
   function addDefinitionFootprint() {
@@ -1505,6 +1528,7 @@
     state.definitions = window.DepoCatalog.normalizeDefinitions(state.definitions, state.tables);
     saveState();
     renderAll(true);
+    renderDefinitionTabCounts();
     loadDefinitionEditor(definition.id);
     showToast("Kategori tanımı kaydedildi.");
   }
@@ -1522,10 +1546,125 @@
       return entry.id !== category.id;
     });
     saveState();
+    renderDefinitionTabCounts();
     const first = categoryDefinitions()[0];
     loadDefinitionEditor(first ? first.id : "");
     renderAll(false);
     showToast("Kategori tanımı silindi.");
+  }
+
+  function footprintUsageCount(name) {
+    const key = normalizeText(name);
+    return state.tables.reduce(function (total, table) {
+      return total + table.items.filter(function (item) {
+        return normalizeText(item.footprint) === key;
+      }).length;
+    }, 0);
+  }
+
+  function showGlobalFootprintError(message) {
+    $("global-footprint-error").textContent = message;
+    $("global-footprint-error").hidden = !message;
+  }
+
+  function renderGlobalFootprintList() {
+    const query = normalizeText($("global-footprint-search").value);
+    const footprints = allDefinedFootprints().filter(function (footprint) {
+      return !query || normalizeText(footprint).includes(query);
+    });
+    $("global-footprint-list").innerHTML = footprints.length
+      ? footprints.map(function (footprint) {
+        return '<button type="button" class="definition-category-button' +
+          (normalizeText(footprint) === normalizeText(ui.definitionFootprint) ? " is-active" : "") +
+          '" data-global-footprint="' + escapeHtml(footprint) + '"><span>' +
+          escapeHtml(footprint) + '</span><small>' + footprintUsageCount(footprint) + "</small></button>";
+      }).join("")
+      : '<div class="combo-empty">Tanımlı kılıf yok</div>';
+  }
+
+  function loadGlobalFootprintEditor(footprint) {
+    const existing = allDefinedFootprints().find(function (entry) {
+      return normalizeText(entry) === normalizeText(footprint);
+    }) || "";
+    ui.definitionFootprint = existing;
+    $("global-footprint-original").value = existing;
+    $("global-footprint-name").value = existing;
+    $("global-footprint-usage").textContent = existing ? footprintUsageCount(existing) : "0";
+    $("delete-global-footprint").hidden = !existing;
+    showGlobalFootprintError("");
+    renderGlobalFootprintList();
+    window.setTimeout(function () { $("global-footprint-name").focus(); }, 0);
+  }
+
+  function saveGlobalFootprint(event) {
+    event.preventDefault();
+    if (!requireAdministrator()) return;
+    const original = $("global-footprint-original").value.trim();
+    const name = $("global-footprint-name").value.trim();
+    if (!name) {
+      showGlobalFootprintError("Kılıf adı zorunludur.");
+      return;
+    }
+    const duplicate = allDefinedFootprints().some(function (footprint) {
+      return normalizeText(footprint) === normalizeText(name) &&
+        normalizeText(footprint) !== normalizeText(original);
+    });
+    if (duplicate) {
+      showGlobalFootprintError("Bu isimde bir kılıf zaten var.");
+      return;
+    }
+
+    const definitions = state.definitions;
+    if (original && normalizeText(original) !== normalizeText(name)) {
+      definitions.categories.forEach(function (category) {
+        category.footprints = (category.footprints || []).map(function (footprint) {
+          return normalizeText(footprint) === normalizeText(original) ? name : footprint;
+        });
+      });
+      state.tables.forEach(function (table) {
+        table.items.forEach(function (item) {
+          if (normalizeText(item.footprint) === normalizeText(original)) item.footprint = name;
+        });
+      });
+      definitions.footprints = (definitions.footprints || []).filter(function (footprint) {
+        return normalizeText(footprint) !== normalizeText(original);
+      });
+    }
+    definitions.footprints = window.DepoCatalog.uniqueSorted(
+      (definitions.footprints || []).concat(name)
+    );
+    state.definitions = window.DepoCatalog.normalizeDefinitions(definitions, state.tables);
+    saveState();
+    renderAll(true);
+    renderDefinitionTabCounts();
+    loadGlobalFootprintEditor(name);
+    showToast(original ? "Kılıf tanımı güncellendi." : "Yeni kılıf eklendi.");
+  }
+
+  function deleteGlobalFootprint() {
+    if (!requireAdministrator()) return;
+    const footprint = ui.definitionFootprint;
+    if (!footprint) return;
+    const usage = footprintUsageCount(footprint);
+    if (usage) {
+      showGlobalFootprintError("Bu kılıf " + usage + " stok kartında kullanılıyor. Önce kartlardaki kılıfı değiştirin.");
+      return;
+    }
+    state.definitions.footprints = (state.definitions.footprints || []).filter(function (entry) {
+      return normalizeText(entry) !== normalizeText(footprint);
+    });
+    state.definitions.categories.forEach(function (category) {
+      category.footprints = (category.footprints || []).filter(function (entry) {
+        return normalizeText(entry) !== normalizeText(footprint);
+      });
+    });
+    state.definitions = window.DepoCatalog.normalizeDefinitions(state.definitions, state.tables);
+    saveState();
+    renderDefinitionTabCounts();
+    const first = allDefinedFootprints()[0] || "";
+    loadGlobalFootprintEditor(first);
+    renderAll(false);
+    showToast("Kılıf tanımı silindi.");
   }
 
   // ---------------------------------------------------------------------------
@@ -1553,9 +1692,9 @@
           message: "Firebase'deki mevcut listeler ve hareketler bu yedekle değiştirilecek.",
           submitLabel: "İçe Aktar",
           submitStyle: "danger",
-          onSubmit: function () {
+          onSubmit: async function () {
             const signedInUser = currentUser();
-            state = window.DepoStore.replace(imported);
+            state = await window.DepoStore.replace(imported);
             if (signedInUser) {
               let importedUser = state.users.find(function (user) {
                 return normalizeText(user.username) === normalizeText(signedInUser.username);
@@ -1933,6 +2072,8 @@
       "new-definition": function () { loadDefinitionEditor(""); },
       "add-definition-footprint": addDefinitionFootprint,
       "delete-definition": deleteDefinition,
+      "new-global-footprint": function () { loadGlobalFootprintEditor(""); },
+      "delete-global-footprint": deleteGlobalFootprint,
       "refresh": function () {
         ui.activeItemId = null;
         ui.formItemId = null;
@@ -2244,6 +2385,16 @@
     if (event.key !== "Enter") return;
     event.preventDefault();
     addDefinitionFootprint();
+  });
+  document.querySelector(".definitions-tabs").addEventListener("click", function (event) {
+    const tab = event.target.closest("[data-definition-view]");
+    if (tab) setDefinitionView(tab.dataset.definitionView);
+  });
+  $("global-footprint-form").addEventListener("submit", saveGlobalFootprint);
+  $("global-footprint-search").addEventListener("input", renderGlobalFootprintList);
+  $("global-footprint-list").addEventListener("click", function (event) {
+    const button = event.target.closest("[data-global-footprint]");
+    if (button) loadGlobalFootprintEditor(button.dataset.globalFootprint);
   });
 
   $("json-file-input").addEventListener("change", function () {

@@ -1472,8 +1472,53 @@ body.is-resizing-column * {
   display: grid;
   width: min(940px, 96vw);
   height: min(700px, 90vh);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
+}
+
+.definitions-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.definitions-tab {
+  position: relative;
+  padding: 9px 13px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.definitions-tab::after {
+  position: absolute;
+  right: 8px;
+  bottom: -1px;
+  left: 8px;
+  height: 2px;
+  background: transparent;
+  content: "";
+}
+
+.definitions-tab:hover,
+.definitions-tab.is-active {
+  color: var(--primary);
+}
+
+.definitions-tab:focus {
+  outline: 0;
+}
+
+.definitions-tab:focus-visible {
+  border-radius: 5px 5px 0 0;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
+.definitions-tab.is-active::after {
+  background: var(--primary);
 }
 
 .definitions-layout {
@@ -1490,6 +1535,47 @@ body.is-resizing-column * {
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--surface-soft);
+}
+
+.definition-simple-editor {
+  grid-template-columns: minmax(0, 1fr) 140px;
+}
+
+.definition-editor-intro {
+  grid-column: 1 / -1;
+  padding-bottom: 4px;
+}
+
+.definition-editor-intro strong,
+.definition-editor-intro span {
+  display: block;
+}
+
+.definition-editor-intro span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.definition-usage-card {
+  display: grid;
+  align-content: center;
+  justify-items: end;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-soft);
+}
+
+.definition-usage-card span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.definition-usage-card strong {
+  font-size: 18px;
 }
 
 .definitions-sidebar {
@@ -1562,7 +1648,8 @@ body.is-resizing-column * {
 
 .definition-footprints-section,
 .definitions-actions,
-#definition-error {
+#definition-error,
+#global-footprint-error {
   grid-column: 1 / -1;
 }
 

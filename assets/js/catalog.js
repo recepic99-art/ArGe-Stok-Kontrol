@@ -89,6 +89,9 @@
     const inputCategories = value && Array.isArray(value.categories)
       ? clone(value.categories)
       : [];
+    const inputFootprints = value && Array.isArray(value.footprints)
+      ? clone(value.footprints)
+      : [];
     const categoriesByName = new Map();
 
     inputCategories.forEach(function (category) {
@@ -125,25 +128,36 @@
       }
     });
 
-    STARTER_CATEGORIES.forEach(function (name) {
-      const key = normalizeText(name);
-      if (!categoriesByName.has(key)) {
-        categoriesByName.set(key, {
+    // Başlangıç seçenekleri yalnızca tamamen boş yeni kurulumda oluşturulur.
+    // Tanım ekranından silinen bir kategori her normalizasyonda geri gelmemelidir.
+    if (!inputCategories.length && !categoriesByName.size) {
+      STARTER_CATEGORIES.forEach(function (name) {
+        categoriesByName.set(normalizeText(name), {
           id: categoryId(name),
           name: name,
           footprintMode: defaultFootprintMode(name),
           footprints: []
         });
-      }
-    });
+      });
+    }
 
-    return {
-      categories: Array.from(categoriesByName.values()).sort(function (left, right) {
+    const categories = Array.from(categoriesByName.values()).sort(function (left, right) {
         return left.name.localeCompare(right.name, "tr", {
           numeric: true,
           sensitivity: "base"
         });
-      })
+      });
+
+    // Kılıflar kategorilerden bağımsız bir katalog olarak da tutulur. Böylece
+    // henüz hiçbir kategoriye bağlanmamış yeni bir kılıf kaybolmadan saklanabilir.
+    const footprints = uniqueSorted(inputFootprints.concat(
+      categories.flatMap(function (category) { return category.footprints || []; }),
+      allItems(tables).map(function (item) { return String(item.footprint || "").trim(); })
+    ));
+
+    return {
+      categories: categories,
+      footprints: footprints
     };
   }
 
@@ -155,9 +169,13 @@
   }
 
   function allFootprints(definitions) {
-    return uniqueSorted(((definitions && definitions.categories) || []).flatMap(function (category) {
-      return category.footprints || [];
-    }));
+    return uniqueSorted(
+      ((definitions && definitions.footprints) || []).concat(
+        ((definitions && definitions.categories) || []).flatMap(function (category) {
+          return category.footprints || [];
+        })
+      )
+    );
   }
 
   window.DepoCatalog = {

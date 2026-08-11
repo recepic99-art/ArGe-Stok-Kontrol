@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title>Ar-Ge Numune Depo - Web Demo</title>
   <link rel="stylesheet" href="assets/vendor/dockview/dockview.css?v=7.0.3">
-  <link rel="stylesheet" href="assets/css/app.css?v=session-17">
+  <link rel="stylesheet" href="assets/css/app.css?v=catalog-2">
 </head>
 <body>
   <div id="app" class="app-shell" aria-hidden="true">
@@ -371,7 +371,11 @@
         </div>
         <button class="icon-button" data-action="close-definitions" aria-label="Kapat">×</button>
       </div>
-      <div class="definitions-layout">
+      <div class="definitions-tabs" role="tablist" aria-label="Tanım türü">
+        <button id="definitions-category-tab" class="definitions-tab is-active" type="button" data-definition-view="categories">Kategoriler</button>
+        <button id="definitions-footprint-tab" class="definitions-tab" type="button" data-definition-view="footprints">Kılıflar</button>
+      </div>
+      <div id="definitions-category-pane" class="definitions-layout">
         <aside class="definitions-sidebar">
           <div class="definitions-sidebar-toolbar">
             <input id="definition-search" class="control" type="search" placeholder="Kategori ara">
@@ -412,6 +416,34 @@
           </div>
         </form>
       </div>
+      <div id="definitions-footprint-pane" class="definitions-layout" hidden>
+        <aside class="definitions-sidebar">
+          <div class="definitions-sidebar-toolbar">
+            <input id="global-footprint-search" class="control" type="search" placeholder="Kılıf ara">
+            <button class="icon-button" data-action="new-global-footprint" title="Yeni kılıf" aria-label="Yeni kılıf">+</button>
+          </div>
+          <div id="global-footprint-list" class="definition-category-list"></div>
+        </aside>
+        <form id="global-footprint-form" class="definition-editor definition-simple-editor" autocomplete="off">
+          <input id="global-footprint-original" type="hidden">
+          <div class="definition-editor-intro">
+            <strong>Kılıf kaydı</strong>
+            <span>Kılıfı yeniden adlandırdığınızda stok kartları ve kategori eşleştirmeleri de güncellenir.</span>
+          </div>
+          <label>Kılıf adı<input id="global-footprint-name" class="control" required placeholder="Örn. SOIC-8"></label>
+          <div id="global-footprint-error" class="inline-error" hidden></div>
+          <div class="definition-usage-card">
+            <span>Kullanıldığı stok kartı</span>
+            <strong id="global-footprint-usage">0</strong>
+          </div>
+          <div class="definitions-actions">
+            <button id="delete-global-footprint" class="button button-danger" type="button" data-action="delete-global-footprint">Kılıfı Sil</button>
+            <span></span>
+            <button class="button button-muted" type="button" data-action="close-definitions">Kapat</button>
+            <button class="button button-primary" type="submit">Kaydet</button>
+          </div>
+        </form>
+      </div>
     </section>
   </div>
 
@@ -419,17 +451,17 @@
   <input id="json-file-input" type="file" accept=".json,application/json" hidden>
   <input id="bom-file-input" type="file" accept=".csv,.txt,text/csv,text/plain" hidden>
 
-  <script src="assets/js/seed.js?v=catalog-1"></script>
-  <script src="assets/js/catalog.js?v=1"></script>
-  <script src="assets/js/data.js?v=catalog-1"></script>
+  <script src="assets/js/seed.js?v=catalog-2"></script>
+  <script src="assets/js/catalog.js?v=2"></script>
+  <script src="assets/js/data.js?v=catalog-2"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
   <script src="assets/js/firebase-config.js?v=firebase-4"></script>
-  <script src="firebase-store-v4.js?v=16"></script>
+  <script src="firebase-store-v4.js?v=17"></script>
   <script src="assets/vendor/dockview/dockview.min.js?v=7.0.3"></script>
   <script src="assets/js/dock-layout.js?v=6"></script>
-  <script src="assets/js/combobox.js?v=1"></script>
-  <script src="assets/js/app.js?v=catalog-1"></script>
+  <script src="assets/js/combobox.js?v=2"></script>
+  <script src="assets/js/app.js?v=catalog-2"></script>
 </body>
 </html>

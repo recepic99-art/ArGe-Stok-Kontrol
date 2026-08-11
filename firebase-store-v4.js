@@ -398,7 +398,11 @@
       categories: recordPatch(
         base.definitions && base.definitions.categories,
         after.definitions && after.definitions.categories
-      )
+      ),
+      footprints: JSON.stringify(base.definitions && base.definitions.footprints || []) ===
+        JSON.stringify(after.definitions && after.definitions.footprints || [])
+        ? null
+        : clone(after.definitions && after.definitions.footprints || [])
     };
   }
 
@@ -409,7 +413,8 @@
       !patch.logs.upserts.length &&
       !patch.logs.removedIds.length &&
       !patch.categories.upserts.length &&
-      !patch.categories.removedIds.length
+      !patch.categories.removedIds.length &&
+      patch.footprints === null
     );
   }
 
@@ -424,6 +429,9 @@
       await cloudReference.child("definitions/categories").transaction(function (categories) {
         return applyRecordPatch(categories, patch.categories);
       });
+    }
+    if (patch.footprints !== null) {
+      await cloudReference.child("definitions/footprints").set(patch.footprints);
     }
     await cloudReference.child("schemaVersion").set(SCHEMA_VERSION);
   }
@@ -502,6 +510,10 @@
 
   function firebaseErrorMessage(error) {
     const code = error && error.code || "";
+    const message = String(error && error.message || "");
+    if (code.includes("permission-denied") || /permission.denied/i.test(message)) {
+      return "Firebase yazma izni vermedi. Yönetici hesabını ve Firebase Database Rules ayarlarını kontrol edin.";
+    }
     if (code.includes("invalid-credential") || code.includes("wrong-password") ||
         code.includes("user-not-found")) {
       return "Kullanıcı adı veya şifre hatalı.";
@@ -840,15 +852,25 @@
     return role;
   }
 
-  function replace(imported) {
+  async function replace(imported) {
     const normalized = normalizeState(imported);
     writeLocalUi(normalized);
     const payload = inventoryPayload(normalized);
-    lastCloudInventory = clone(payload);
-    queueInventoryWrite(function () {
-      return writeInventory(payload);
-    });
-    return normalized;
+
+    // JSON içe aktarma toplu ve geri dönüşü önemli bir işlemdir. Normal küçük
+    // kayıt kuyruğunun aksine burada Firebase cevabını bekleriz; yazma başarısızsa
+    // arayüz yanlışlıkla "içe aktarıldı" mesajı göstermez.
+    await writeQueue;
+    pendingWriteCount += 1;
+    try {
+      await writeInventory(payload);
+      lastCloudInventory = clone(payload);
+      return normalized;
+    } catch (error) {
+      throw new Error(firebaseErrorMessage(error));
+    } finally {
+      pendingWriteCount = Math.max(0, pendingWriteCount - 1);
+    }
   }
 
   window.DepoStore = {
