@@ -12,6 +12,9 @@
       "logs": {
         ".write": "auth != null"
       },
+      "definitions": {
+        ".write": "auth != null && root.child('appState/rolesByUid').child(auth.uid).val() == 'admin'"
+      },
       "userDirectory": {
         "$uid": {
           ".write": "auth != null && auth.uid == $uid",

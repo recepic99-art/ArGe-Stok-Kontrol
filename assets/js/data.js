@@ -17,15 +17,17 @@
   // Yeni bir JSON dosyası oluşturulduğunda yalnızca gerçek kullanıcı ve boş ana liste gelir.
   function createInitialState() {
     if (window.DepoSeedState) {
-      return JSON.parse(JSON.stringify(window.DepoSeedState));
+      const seed = JSON.parse(JSON.stringify(window.DepoSeedState));
+      seed.definitions = window.DepoCatalog.normalizeDefinitions(seed.definitions, seed.tables);
+      return seed;
     }
 
     const columns = columnDefinitions.map(function (column) {
       return column.key;
     });
 
-    return {
-      schemaVersion: 2,
+    const initialState = {
+      schemaVersion: 6,
       users: [
         { id: "u-recep", username: "recep", name: "Recep İç", role: "admin" }
       ],
@@ -72,6 +74,8 @@
         }
       }
     };
+    initialState.definitions = window.DepoCatalog.normalizeDefinitions(null, initialState.tables);
+    return initialState;
   }
 
   window.DepoData = {

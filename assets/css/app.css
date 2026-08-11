@@ -645,6 +645,95 @@ textarea.control {
   resize: vertical;
 }
 
+.combo-field {
+  position: relative;
+  display: block;
+}
+
+.combo-field .control {
+  padding-right: 34px;
+}
+
+.combo-toggle {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 31px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0 6px 6px 0;
+  background: var(--surface-soft);
+  cursor: pointer;
+}
+
+.combo-toggle::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  content: "";
+  transform: translate(-50%, -65%) rotate(45deg);
+}
+
+.combo-toggle:hover {
+  background: var(--surface-raised);
+}
+
+.combo-toggle:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.combo-popover {
+  position: fixed;
+  z-index: 2600;
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.22);
+}
+
+.combo-option {
+  display: block;
+  width: 100%;
+  padding: 8px 9px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.combo-option:hover,
+.combo-option.is-active {
+  background: var(--selected);
+  color: var(--selected-text);
+}
+
+.combo-group {
+  padding: 7px 9px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.combo-empty {
+  padding: 12px 9px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .table-list-heading {
   display: flex;
   align-items: center;
@@ -1377,6 +1466,188 @@ body.is-resizing-column * {
   height: min(720px, 90vh);
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   overflow: hidden;
+}
+
+.definitions-modal {
+  display: grid;
+  width: min(940px, 96vw);
+  height: min(700px, 90vh);
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.definitions-layout {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.definitions-sidebar,
+.definition-editor {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-soft);
+}
+
+.definitions-sidebar {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.definitions-sidebar-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 7px;
+  padding: 9px;
+  border-bottom: 1px solid var(--border);
+}
+
+.definition-category-list {
+  overflow: auto;
+  padding: 5px;
+}
+
+.definition-category-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 9px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.definition-category-button:hover,
+.definition-category-button.is-active {
+  background: var(--selected);
+  color: var(--selected-text);
+}
+
+.definition-category-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.definition-category-button small {
+  color: var(--muted);
+}
+
+.definition-editor {
+  display: grid;
+  align-content: start;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+  padding: 14px;
+  overflow: auto;
+  background: var(--surface);
+}
+
+.definition-editor > label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.definition-footprints-section,
+.definitions-actions,
+#definition-error {
+  grid-column: 1 / -1;
+}
+
+.definition-section-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.definition-section-heading strong,
+.definition-section-heading span {
+  display: block;
+}
+
+.definition-section-heading span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.definition-footprint-list {
+  display: grid;
+  max-height: 260px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  overflow: auto;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-soft);
+}
+
+.definition-footprint-option {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 6px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.definition-footprint-option:hover {
+  background: var(--surface-raised);
+}
+
+.definition-footprint-option span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.definition-add-footprint {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.definitions-actions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+@media (max-width: 760px) {
+  .definitions-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .definitions-sidebar {
+    max-height: 210px;
+  }
+
+  .definition-editor,
+  .definition-section-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .definition-footprint-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .modal-header {

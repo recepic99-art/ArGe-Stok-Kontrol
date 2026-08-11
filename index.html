@@ -26,6 +26,8 @@
         <div id="edit-menu" class="menu-popover" hidden>
           <button data-action="new-card">Yeni stok kartı</button>
           <button data-action="clear-selection">Seçimleri temizle</button>
+          <div class="menu-separator"></div>
+          <button data-action="open-definitions">Kategori ve kılıf tanımları</button>
         </div>
       </div>
       <div class="menu-group">
@@ -155,10 +157,20 @@
             <div class="form-grid">
               <label>ID<input id="item-id" class="control" readonly></label>
               <label>Malzeme Adı<input id="item-name" class="control" autocomplete="off" required></label>
-              <label>Cins/Kategori<input id="item-category" class="control" autocomplete="off"></label>
-              <label>Kılıf<input id="item-footprint" class="control" autocomplete="off" placeholder="0603, 0805, SOT23"></label>
+              <label>Cins/Kategori
+                <span class="combo-field">
+                  <input id="item-category" class="control" autocomplete="off" placeholder="Kategori seçin">
+                  <button id="item-category-toggle" class="combo-toggle" type="button" tabindex="-1" aria-label="Kategorileri aç"></button>
+                </span>
+              </label>
+              <label id="item-footprint-label">Kılıf
+                <span class="combo-field">
+                  <input id="item-footprint" class="control" autocomplete="off" placeholder="Kılıf seçin">
+                  <button id="item-footprint-toggle" class="combo-toggle" type="button" tabindex="-1" aria-label="Kılıfları aç"></button>
+                </span>
+              </label>
               <label>Kutu<input id="item-box" class="control" autocomplete="off"></label>
-              <label>Miktar<input id="item-quantity" class="control" type="number" min="0" step="0.01"></label>
+              <label>Miktar<input id="item-quantity" class="control" type="number" min="0" step="1" inputmode="numeric"></label>
               <label>Birim
                 <select id="item-unit" class="control">
                   <option>adet</option>
@@ -167,7 +179,7 @@
                   <option>litre</option>
                 </select>
               </label>
-              <label>Kritik Seviye<input id="item-critical" class="control" type="number" min="0" step="0.01"></label>
+              <label>Kritik Seviye<input id="item-critical" class="control" type="number" min="0" step="1" inputmode="numeric"></label>
               <label class="form-span">Açıklama<textarea id="item-description" class="control" autocomplete="off" rows="2"></textarea></label>
             </div>
             <div class="form-actions">
@@ -188,7 +200,7 @@
                 <option>Giriş</option>
               </select>
               <label for="movement-quantity">Miktar</label>
-              <input id="movement-quantity" class="control" type="number" value="1" min="0.01" step="0.01">
+              <input id="movement-quantity" class="control" type="number" value="1" min="1" step="1" inputmode="numeric">
               <label id="movement-purpose-label" for="movement-purpose">Kullanım amacı/proje</label>
               <input id="movement-purpose" class="control" autocomplete="off">
               <span>Alan/Veren</span>
@@ -350,19 +362,74 @@
     </section>
   </div>
 
+  <div id="definitions-modal" class="modal-overlay" hidden>
+    <section class="modal-dialog definitions-modal" role="dialog" aria-modal="true" aria-labelledby="definitions-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="definitions-title">Kategori ve Kılıf Tanımları</h2>
+          <p class="muted">Stok kartlarında kullanılacak ortak seçenekler</p>
+        </div>
+        <button class="icon-button" data-action="close-definitions" aria-label="Kapat">×</button>
+      </div>
+      <div class="definitions-layout">
+        <aside class="definitions-sidebar">
+          <div class="definitions-sidebar-toolbar">
+            <input id="definition-search" class="control" type="search" placeholder="Kategori ara">
+            <button class="icon-button" data-action="new-definition" title="Yeni kategori" aria-label="Yeni kategori">+</button>
+          </div>
+          <div id="definition-category-list" class="definition-category-list"></div>
+        </aside>
+        <form id="definition-form" class="definition-editor" autocomplete="off">
+          <input id="definition-id" type="hidden">
+          <label>Kategori adı<input id="definition-name" class="control" required></label>
+          <label>Kılıf alanı
+            <select id="definition-footprint-mode" class="control">
+              <option value="required">Zorunlu</option>
+              <option value="optional">İsteğe bağlı</option>
+              <option value="hidden">Gösterme</option>
+            </select>
+          </label>
+          <div id="definition-footprints-section" class="definition-footprints-section">
+            <div class="definition-section-heading">
+              <div>
+                <strong>Önerilen kılıflar</strong>
+                <span>Bu kategori seçildiğinde listenin üstünde görünür.</span>
+              </div>
+              <input id="definition-footprint-search" class="control" type="search" placeholder="Kılıf ara">
+            </div>
+            <div id="definition-footprint-list" class="definition-footprint-list"></div>
+            <div class="definition-add-footprint">
+              <input id="definition-new-footprint" class="control" placeholder="Yeni kılıf adı">
+              <button class="button button-muted" type="button" data-action="add-definition-footprint">Ekle</button>
+            </div>
+          </div>
+          <div id="definition-error" class="inline-error" hidden></div>
+          <div class="definitions-actions">
+            <button id="delete-definition" class="button button-danger" type="button" data-action="delete-definition">Kategoriyi Sil</button>
+            <span></span>
+            <button class="button button-muted" type="button" data-action="close-definitions">Kapat</button>
+            <button class="button button-primary" type="submit">Kaydet</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </div>
+
   <div id="toast-region" class="toast-region" aria-live="polite"></div>
   <input id="json-file-input" type="file" accept=".json,application/json" hidden>
   <input id="bom-file-input" type="file" accept=".csv,.txt,text/csv,text/plain" hidden>
 
-  <script src="assets/js/seed.js?v=firebase-4"></script>
-  <script src="assets/js/data.js?v=firebase-4"></script>
+  <script src="assets/js/seed.js?v=catalog-1"></script>
+  <script src="assets/js/catalog.js?v=1"></script>
+  <script src="assets/js/data.js?v=catalog-1"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
   <script src="assets/js/firebase-config.js?v=firebase-4"></script>
-  <script src="firebase-store-v4.js?v=15"></script>
+  <script src="firebase-store-v4.js?v=16"></script>
   <script src="assets/vendor/dockview/dockview.min.js?v=7.0.3"></script>
   <script src="assets/js/dock-layout.js?v=6"></script>
-  <script src="assets/js/app.js?v=session-17"></script>
+  <script src="assets/js/combobox.js?v=1"></script>
+  <script src="assets/js/app.js?v=catalog-1"></script>
 </body>
 </html>

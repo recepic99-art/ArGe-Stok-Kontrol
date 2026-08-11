@@ -1,10 +1,10 @@
 (function () {
   "use strict";
 
-  // Firebase ortak veri katmanı - v7.
+  // Firebase ortak veri katmanı - v8.
   const LOCAL_UI_KEY = "arge-numune-depo-ui-v1";
   const CLOUD_PATH = "appState";
-  const SCHEMA_VERSION = 5;
+  const SCHEMA_VERSION = 6;
 
   let database = null;
   let auth = null;
@@ -106,6 +106,10 @@
     });
     normalized.tables = normalizeTables(normalized.tables);
     normalized.logs = toArray(normalized.logs);
+    normalized.definitions = window.DepoCatalog.normalizeDefinitions(
+      normalized.definitions,
+      normalized.tables
+    );
     normalized.session = Object.assign(
       {},
       defaults.session,
@@ -186,7 +190,11 @@
     return {
       schemaVersion: SCHEMA_VERSION,
       tables: normalizeTables(state.tables),
-      logs: toArray(state.logs)
+      logs: toArray(state.logs),
+      definitions: window.DepoCatalog.normalizeDefinitions(
+        state.definitions,
+        normalizeTables(state.tables)
+      )
     };
   }
 
@@ -198,6 +206,7 @@
       users: usersFromCloud(cloudState),
       tables: normalizeTables(cloudState.tables),
       logs: toArray(cloudState.logs),
+      definitions: cloudState.definitions,
       session: Object.assign({}, defaults.session, localUi.session || {}),
       settings: Object.assign({}, defaults.settings, localUi.settings || {})
     });
@@ -382,10 +391,14 @@
   }
 
   function inventoryPatch(before, after) {
-    const base = before || { tables: [], logs: [] };
+    const base = before || { tables: [], logs: [], definitions: { categories: [] } };
     return {
       tables: tablePatch(base.tables, after.tables),
-      logs: recordPatch(base.logs, after.logs)
+      logs: recordPatch(base.logs, after.logs),
+      categories: recordPatch(
+        base.definitions && base.definitions.categories,
+        after.definitions && after.definitions.categories
+      )
     };
   }
 
@@ -394,7 +407,9 @@
       !patch.tables.changes.length &&
       !patch.tables.removedIds.length &&
       !patch.logs.upserts.length &&
-      !patch.logs.removedIds.length
+      !patch.logs.removedIds.length &&
+      !patch.categories.upserts.length &&
+      !patch.categories.removedIds.length
     );
   }
 
@@ -405,6 +420,11 @@
     await cloudReference.child("logs").transaction(function (logs) {
       return applyRecordPatch(logs, patch.logs);
     });
+    if (patch.categories.upserts.length || patch.categories.removedIds.length) {
+      await cloudReference.child("definitions/categories").transaction(function (categories) {
+        return applyRecordPatch(categories, patch.categories);
+      });
+    }
     await cloudReference.child("schemaVersion").set(SCHEMA_VERSION);
   }
 
@@ -415,7 +435,8 @@
     if (!cloudState) return;
     lastCloudInventory = inventoryPayload({
       tables: cloudState.tables || [],
-      logs: cloudState.logs || []
+      logs: cloudState.logs || [],
+      definitions: cloudState.definitions
     });
     if (watchCallback) watchCallback(mergeCloudWithLocal(cloudState));
   }
@@ -532,6 +553,7 @@
   // Firebase tarayicida oturumu saklar. Sayfa yenilendiginde bu kimligi ortak
   // kullanici kaydi ve guncel yetkiyle yeniden birlestiririz.
   async function restoreAuthenticatedSession(firebaseUser) {
+    const role = await ensureCurrentUserRole(firebaseUser.uid);
     const loaded = await loadCloudState();
     let user = loaded.users.find(function (entry) {
       return entry.authUid === firebaseUser.uid;
@@ -550,7 +572,7 @@
       loaded.users.push(user);
     }
 
-    user.role = await ensureCurrentUserRole(firebaseUser.uid);
+    user.role = role;
     loaded.session.currentUserId = user.id;
     await writeCurrentUser(user);
     writeLocalUi(loaded);
@@ -601,7 +623,8 @@
 
     lastCloudInventory = inventoryPayload({
       tables: cloudState.tables || [],
-      logs: cloudState.logs || []
+      logs: cloudState.logs || [],
+      definitions: cloudState.definitions
     });
     return mergeCloudWithLocal(cloudState);
   }
@@ -609,6 +632,7 @@
   async function signIn(username, password) {
     try {
       const credential = await auth.signInWithEmailAndPassword(usernameEmail(username), password);
+      const role = await ensureCurrentUserRole(credential.user.uid);
       const loaded = await loadCloudState();
       let user = loaded.users.find(function (entry) {
         return entry.authUid === credential.user.uid;
@@ -631,7 +655,7 @@
         loaded.users.push(user);
       }
 
-      user.role = await ensureCurrentUserRole(credential.user.uid);
+      user.role = role;
       loaded.session.currentUserId = user.id;
       await writeCurrentUser(user);
       writeLocalUi(loaded);
@@ -645,6 +669,7 @@
     try {
       const credential = await auth.createUserWithEmailAndPassword(usernameEmail(username), password);
       await credential.user.updateProfile({ displayName: name });
+      const role = await ensureCurrentUserRole(credential.user.uid);
       const loaded = await loadCloudState();
       let user = loaded.users.find(function (entry) {
         return normalizeUsername(entry.username) === normalizeUsername(username);
@@ -665,7 +690,7 @@
       }
       user.authUid = credential.user.uid;
       user.name = name;
-      user.role = await ensureCurrentUserRole(credential.user.uid);
+      user.role = role;
       loaded.session.currentUserId = user.id;
       await writeCurrentUser(user);
       writeLocalUi(loaded);
@@ -753,7 +778,8 @@
       if (pendingWriteCount) return;
       lastCloudInventory = inventoryPayload({
         tables: cloudState.tables || [],
-        logs: cloudState.logs || []
+        logs: cloudState.logs || [],
+        definitions: cloudState.definitions
       });
       onChange(mergeCloudWithLocal(cloudState));
     });
