@@ -1,0 +1,33 @@
+Ar-Ge Numune Depo - 11.08.2026 kategori standardizasyonu
+
+Kategori sayisi icin yapay bir ust sinir uygulanmadi.
+Stok miktarlari, kritik seviyeler, kullanicilar, hareketler ve tablolar korunmustur.
+
+Toplam malzeme: 278
+Son kategori sayisi: 44
+Degisen malzeme: 10
+Toplam alan degisikligi: 21
+
+Degisiklikler
+-------------
+16F55135 | 74HC4066D | name: '74HC4066D' -> '74HC4066D Analog Switch'
+4ED3609B | L9637D | name: 'L9637D' -> 'L9637D K-Line Transceiver'
+4ED3609B | L9637D | category: 'Automotive Transceiver' -> 'Interface IC'
+4ED3609B | L9637D | description: 'ISO 9141 uyumlu otomotiv arayüzü' -> 'ISO 9141 uyumlu K-Line arayüz entegresi'
+E8335D19 | TSOP2238 | name: 'TSOP2238' -> 'TSOP2238 IR Receiver Sensor'
+BEF3B6E7 | S3M | name: 'S3M' -> 'S3M Rectifier Diode'
+BEF3B6E7 | S3M | category: 'Diode' -> 'Rectifier Diode'
+NUM0228 | SN74HC14PWR | name: 'SN74HC14PWR' -> 'SN74HC14PWR Schmitt-Trigger Inverter'
+NUM0250 | ZXCT1107SA-7 | name: 'ZXCT1107SA-7' -> 'ZXCT1107SA-7 Current Sense IC'
+NUM0250 | ZXCT1107SA-7 | category: 'Current Monitor' -> 'Current Sense IC'
+NUM0250 | ZXCT1107SA-7 | description: 'high-side current monitor' -> 'High-side akım algılama entegresi'
+NUM0271 | 470uF 16V Aluminum | name: '470uF 16V Aluminum' -> '470uF 16V Aluminum Electrolytic Capacitor'
+NUM0271 | 470uF 16V Aluminum | category: 'Bridge Rectifier' -> 'Aluminum Electrolytic Capacitor'
+NUM0274 | MAX485ED | name: 'MAX485ED' -> 'MAX485ED RS-485 Transceiver'
+NUM0274 | MAX485ED | category: 'RS-485 Transceiver' -> 'Interface IC'
+NUM0275 | CH340 | name: 'CH340' -> 'CH340 USB-UART Bridge'
+NUM0275 | CH340 | category: 'USB-UART Bridge' -> 'Interface IC'
+NUM0275 | CH340 | description: '' -> 'USB-UART arayüz entegresi; tam varyant fiziksel ürün üzerinden doğrulanmalı'
+NUM0278 | MB10F-10 | name: 'MB10F-10' -> 'MB10F-10 Bridge Rectifier'
+NUM0278 | MB10F-10 | footprint: 'MBF SMD' -> 'MBF'
+NUM0278 | MB10F-10 | description: '' -> '1000V SMD köprü doğrultucu'

@@ -42,6 +42,13 @@ window.DepoSeedState = {
       "username": "deneme",
       "name": "Adem Ezici",
       "role": "member"
+    },
+    {
+      "id": "user-vHhk709RrLbnw44Q8gaGIhgGaXi1",
+      "authUid": "vHhk709RrLbnw44Q8gaGIhgGaXi1",
+      "username": "MTK",
+      "name": "Mustafa Talip Koyuncu",
+      "role": "member"
     }
   ],
   "tables": [
@@ -559,7 +566,7 @@ window.DepoSeedState = {
           "description": "",
           "footprint": "SOIC-14",
           "id": "16F55135",
-          "name": "74HC4066D",
+          "name": "74HC4066D Analog Switch",
           "quantity": 10,
           "unit": "adet",
           "updatedAt": "07.07.2026 15:57"
@@ -734,12 +741,12 @@ window.DepoSeedState = {
         },
         {
           "box": "U1",
-          "category": "Automotive Transceiver",
+          "category": "Interface IC",
           "critical": 0,
-          "description": "ISO 9141 uyumlu otomotiv arayüzü",
+          "description": "ISO 9141 uyumlu K-Line arayüz entegresi",
           "footprint": "SOIC-8",
           "id": "4ED3609B",
-          "name": "L9637D",
+          "name": "L9637D K-Line Transceiver",
           "quantity": 50,
           "unit": "adet",
           "updatedAt": "07.07.2026 15:57"
@@ -992,9 +999,9 @@ window.DepoSeedState = {
           "footprint": "SOP-8",
           "id": "AB2A75C6",
           "name": "AP4890U",
-          "quantity": 2,
+          "quantity": 4,
           "unit": "adet",
-          "updatedAt": "10.08.2026 10:12"
+          "updatedAt": "11.08.2026 12:20"
         },
         {
           "box": "U1",
@@ -1123,7 +1130,7 @@ window.DepoSeedState = {
           "description": "38kHz IR Alıcı Sensör",
           "footprint": "3-pin THT",
           "id": "E8335D19",
-          "name": "TSOP2238",
+          "name": "TSOP2238 IR Receiver Sensor",
           "quantity": 5,
           "unit": "adet",
           "updatedAt": "07.07.2026 15:57"
@@ -1814,12 +1821,12 @@ window.DepoSeedState = {
         },
         {
           "box": "D1",
-          "category": "Diode",
+          "category": "Rectifier Diode",
           "critical": 0,
           "description": "3A 1000V",
           "footprint": "DO-214AB (SMC)",
           "id": "BEF3B6E7",
-          "name": "S3M",
+          "name": "S3M Rectifier Diode",
           "quantity": 55,
           "unit": "adet",
           "updatedAt": "07.07.2026 15:57"
@@ -2767,7 +2774,7 @@ window.DepoSeedState = {
           "description": "6-channel Schmitt-trigger inverter logic IC, 2V-6V supply",
           "footprint": "TSSOP-14",
           "id": "NUM0228",
-          "name": "SN74HC14PWR",
+          "name": "SN74HC14PWR Schmitt-Trigger Inverter",
           "quantity": 5,
           "unit": "adet",
           "updatedAt": "06.08.2026 08:52"
@@ -3026,12 +3033,12 @@ window.DepoSeedState = {
         },
         {
           "box": "YENİ3",
-          "category": "Current Monitor",
+          "category": "Current Sense IC",
           "critical": 0,
-          "description": "high-side current monitor",
+          "description": "High-side akım algılama entegresi",
           "footprint": "SOT-23",
           "id": "NUM0250",
-          "name": "ZXCT1107SA-7",
+          "name": "ZXCT1107SA-7 Current Sense IC",
           "quantity": 10,
           "unit": "adet",
           "updatedAt": "06.08.2026 09:46"
@@ -3283,7 +3290,7 @@ window.DepoSeedState = {
           "description": "Ölçü: 8 x 10 mm",
           "footprint": "SMD",
           "id": "NUM0271",
-          "name": "470uF 16V Aluminum",
+          "name": "470uF 16V Aluminum Electrolytic Capacitor",
           "quantity": 6,
           "unit": "adet",
           "updatedAt": "07.08.2026 17:43"
@@ -3314,27 +3321,27 @@ window.DepoSeedState = {
         },
         {
           "box": "YENİ5",
-          "category": "RS-485 Transceiver",
+          "category": "Interface IC",
           "critical": 0,
           "description": "RS-485/RS-422 transceiver",
           "footprint": "SOIC-8",
           "id": "NUM0274",
-          "name": "MAX485ED",
+          "name": "MAX485ED RS-485 Transceiver",
           "quantity": 6,
           "unit": "adet",
           "updatedAt": "10.08.2026 08:37"
         },
         {
           "box": "YENİ5",
-          "category": "USB-UART Bridge",
+          "category": "Interface IC",
           "critical": 10,
-          "description": "Tam parça kodu fiziksel ürün üzerinden doğrulanmalı",
+          "description": "USB-UART arayüz entegresi; tam varyant fiziksel ürün üzerinden doğrulanmalı",
           "footprint": "SOP-16",
           "id": "NUM0275",
-          "name": "USB-UART Converter",
+          "name": "CH340 USB-UART Bridge",
           "quantity": 50,
           "unit": "adet",
-          "updatedAt": "10.08.2026 08:41"
+          "updatedAt": "11.08.2026 14:07"
         },
         {
           "box": "YENİ5",
@@ -3347,6 +3354,42 @@ window.DepoSeedState = {
           "quantity": 6,
           "unit": "adet",
           "updatedAt": "10.08.2026 09:45"
+        },
+        {
+          "box": "YENİ5",
+          "category": "Inductor",
+          "critical": 0,
+          "description": "NR5020-150M; Ölçü: 5 x 5 mm",
+          "footprint": "SMD",
+          "id": "NUM0277",
+          "name": "15uH",
+          "quantity": 18,
+          "unit": "adet",
+          "updatedAt": "11.08.2026 14:08"
+        },
+        {
+          "box": "YENİ5",
+          "category": "Bridge Rectifier",
+          "critical": 0,
+          "description": "1000V SMD köprü doğrultucu",
+          "footprint": "MBF",
+          "id": "NUM0278",
+          "name": "MB10F-10 Bridge Rectifier",
+          "quantity": 6,
+          "unit": "adet",
+          "updatedAt": "11.08.2026 14:13"
+        },
+        {
+          "box": "YENİ5",
+          "category": "Microcontroller",
+          "critical": 0,
+          "description": "",
+          "footprint": "LQFP-64",
+          "id": "NUM0279",
+          "name": "STM32F103RBT6TR",
+          "quantity": 20,
+          "unit": "adet",
+          "updatedAt": "11.08.2026 15:06"
         }
       ],
       "name": "Numune Malzemeler Listesi"
@@ -3399,140 +3442,8 @@ window.DepoSeedState = {
       "tableId": "t-main",
       "type": "Cikis",
       "user": "Recep"
-    },
-    {
-      "after": 9,
-      "before": 24,
-      "date": "29.07.2026 18:30",
-      "id": "log-4G9AYCY",
-      "itemId": "E3D10BC8",
-      "itemName": "1N5346B",
-      "note": "",
-      "purpose": "mayday",
-      "quantity": 15,
-      "tableId": "t-main",
-      "type": "Çıkış",
-      "user": "Eyüp SAYIN"
-    },
-    {
-      "after": 24,
-      "before": 9,
-      "date": "30.07.2026 13:46",
-      "id": "log-K39DE8H",
-      "itemId": "E3D10BC8",
-      "itemName": "1N5346B",
-      "note": "deneme",
-      "purpose": "",
-      "quantity": 15,
-      "tableId": "t-main",
-      "type": "Giriş",
-      "user": "Recep İç"
-    },
-    {
-      "after": 84,
-      "before": 85,
-      "date": "31.07.2026 18:13",
-      "id": "log-B8TCSD3",
-      "itemId": "E965FC51",
-      "itemName": "270K",
-      "note": "deneme",
-      "purpose": "deneme",
-      "quantity": 1,
-      "tableId": "t-main",
-      "type": "Çıkış",
-      "user": "Adem Ezici"
-    },
-    {
-      "after": 85,
-      "before": 84,
-      "date": "31.07.2026 18:14",
-      "id": "log-47IIICF",
-      "itemId": "E965FC51",
-      "itemName": "270K",
-      "note": "deneme",
-      "purpose": "",
-      "quantity": 1,
-      "tableId": "t-main",
-      "type": "Giriş",
-      "user": "Recep İç"
-    },
-    {
-      "after": 2,
-      "before": 4,
-      "date": "10.08.2026 10:12",
-      "id": "log-DTKZ6SI",
-      "itemId": "AB2A75C6",
-      "itemName": "AP4890U",
-      "note": "",
-      "purpose": "can sıkıntısı",
-      "quantity": 2,
-      "tableId": "t-main",
-      "type": "Çıkış",
-      "user": "Eyüp SAYIN"
     }
   ],
-  "session": {
-    "currentUserId": "user-Da467Rpq41UHYpNoS7y8EAR5tf13",
-    "activeTableId": "t-main",
-    "openTableIds": [
-      "t-main",
-      "table-3HJ7PBA"
-    ]
-  },
-  "settings": {
-    "theme": "light",
-    "leftWidth": 250,
-    "rightWidth": 330,
-    "historyHeight": 38,
-    "leftCollapsed": false,
-    "rightCollapsed": false,
-    "visibleColumns": [
-      "id",
-      "name",
-      "category",
-      "footprint",
-      "box",
-      "quantity",
-      "unit",
-      "description",
-      "updatedAt"
-    ],
-    "columnOrder": [
-      "id",
-      "name",
-      "category",
-      "footprint",
-      "box",
-      "quantity",
-      "unit",
-      "critical",
-      "description",
-      "updatedAt"
-    ],
-    "columnWidths": {
-      "id": 100,
-      "name": 180,
-      "category": 141,
-      "footprint": 146,
-      "box": 90,
-      "quantity": 90,
-      "unit": 85,
-      "critical": 110,
-      "description": 230,
-      "updatedAt": 145
-    },
-    "historyColumnWidths": {
-      "date": 151,
-      "itemName": 180,
-      "type": 80,
-      "quantity": 75,
-      "purpose": 210,
-      "user": 120,
-      "note": 180,
-      "before": 75,
-      "after": 75
-    }
-  },
   "definitions": {
     "categories": [
       {
@@ -3564,11 +3475,11 @@ window.DepoSeedState = {
         ]
       },
       {
-        "id": "category-automotive-transceiver",
-        "name": "Automotive Transceiver",
+        "id": "category-bridge-rectifier",
+        "name": "Bridge Rectifier",
         "footprintMode": "required",
         "footprints": [
-          "SOIC-8"
+          "MBF"
         ]
       },
       {
@@ -3628,8 +3539,8 @@ window.DepoSeedState = {
         ]
       },
       {
-        "id": "category-current-monitor",
-        "name": "Current Monitor",
+        "id": "category-current-sense-ic",
+        "name": "Current Sense IC",
         "footprintMode": "required",
         "footprints": [
           "SOT-23"
@@ -3646,14 +3557,6 @@ window.DepoSeedState = {
         "name": "Development Tool",
         "footprintMode": "hidden",
         "footprints": []
-      },
-      {
-        "id": "category-diode",
-        "name": "Diode",
-        "footprintMode": "required",
-        "footprints": [
-          "DO-214AB (SMC)"
-        ]
       },
       {
         "id": "category-encoder",
@@ -3685,6 +3588,15 @@ window.DepoSeedState = {
         "name": "Interface Converter",
         "footprintMode": "hidden",
         "footprints": []
+      },
+      {
+        "id": "category-interface-ic",
+        "name": "Interface IC",
+        "footprintMode": "required",
+        "footprints": [
+          "SOIC-8",
+          "SOP-16"
+        ]
       },
       {
         "id": "category-lcd",
@@ -3789,6 +3701,14 @@ window.DepoSeedState = {
         ]
       },
       {
+        "id": "category-rectifier-diode",
+        "name": "Rectifier Diode",
+        "footprintMode": "required",
+        "footprints": [
+          "DO-214AB (SMC)"
+        ]
+      },
+      {
         "id": "category-reed-switch",
         "name": "Reed Switch",
         "footprintMode": "optional",
@@ -3827,14 +3747,6 @@ window.DepoSeedState = {
           "2512",
           "DIP",
           "SIP-5"
-        ]
-      },
-      {
-        "id": "category-rs-485-transceiver",
-        "name": "RS-485 Transceiver",
-        "footprintMode": "required",
-        "footprints": [
-          "SOIC-8"
         ]
       },
       {
@@ -3925,14 +3837,6 @@ window.DepoSeedState = {
         ]
       },
       {
-        "id": "category-usb-uart-bridge",
-        "name": "USB-UART Bridge",
-        "footprintMode": "required",
-        "footprints": [
-          "SOP-16"
-        ]
-      },
-      {
         "id": "category-wireless-module",
         "name": "Wireless Module",
         "footprintMode": "optional",
@@ -3977,6 +3881,7 @@ window.DepoSeedState = {
       "HSOIC-8 PowerPAD",
       "HSOP-8",
       "LQFP-64",
+      "MBF",
       "Micro-SIM",
       "MSOP-10",
       "MSOP-8",
@@ -4020,5 +3925,66 @@ window.DepoSeedState = {
       "VSSOP-8",
       "WH06 THT"
     ]
+  },
+  "session": {
+    "currentUserId": "user-Da467Rpq41UHYpNoS7y8EAR5tf13",
+    "activeTableId": "t-main",
+    "openTableIds": [
+      "t-main"
+    ]
+  },
+  "settings": {
+    "theme": "light",
+    "leftWidth": 250,
+    "rightWidth": 330,
+    "historyHeight": 38,
+    "leftCollapsed": false,
+    "rightCollapsed": false,
+    "visibleColumns": [
+      "id",
+      "name",
+      "category",
+      "footprint",
+      "box",
+      "quantity",
+      "unit",
+      "description",
+      "updatedAt"
+    ],
+    "columnOrder": [
+      "id",
+      "name",
+      "category",
+      "footprint",
+      "box",
+      "quantity",
+      "unit",
+      "critical",
+      "description",
+      "updatedAt"
+    ],
+    "columnWidths": {
+      "id": 100,
+      "name": 180,
+      "category": 141,
+      "footprint": 146,
+      "box": 90,
+      "quantity": 90,
+      "unit": 85,
+      "critical": 110,
+      "description": 230,
+      "updatedAt": 145
+    },
+    "historyColumnWidths": {
+      "date": 151,
+      "itemName": 180,
+      "type": 80,
+      "quantity": 75,
+      "purpose": 210,
+      "user": 120,
+      "note": 180,
+      "before": 75,
+      "after": 75
+    }
   }
 };

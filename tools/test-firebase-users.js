@@ -7,6 +7,10 @@ const storeSource = fs.readFileSync(
   path.join(__dirname, "..", "firebase-store-v4.js"),
   "utf8"
 );
+const catalogSource = fs.readFileSync(
+  path.join(__dirname, "..", "assets", "js", "catalog.js"),
+  "utf8"
+);
 
 const legacyUsers = [
   {
@@ -213,12 +217,14 @@ function createClient(navigationType) {
     dispatchEvent() {}
   };
 
-  vm.runInNewContext(storeSource, {
+  const context = {
     window: window,
     document: document,
     console: console,
     CustomEvent: class CustomEvent {}
-  });
+  };
+  vm.runInNewContext(catalogSource, context);
+  vm.runInNewContext(storeSource, context);
   window.DepoStore.testPersistence = function () {
     return persistence;
   };
@@ -479,7 +485,64 @@ function authenticatedUsers(state) {
     []
   );
 
-  console.log("OK: Kullanıcılar, yetkiler ve eşzamanlı stok kayıtları kararlı.");
+  // İki yönetici farklı kategori tanımları eklerse ikisi de ortak listede kalmalıdır.
+  const firstDefinitionClient = createClient();
+  const secondDefinitionClient = createClient();
+  await firstDefinitionClient.initialize();
+  await secondDefinitionClient.initialize();
+  const firstDefinitionState = await firstDefinitionClient.signIn("recepic", "demo123");
+  const secondDefinitionState = await secondDefinitionClient.signIn("ali", "demo123");
+  firstDefinitionState.definitions.categories.push({
+    id: "category-first",
+    name: "Birinci kategori",
+    footprintMode: "optional",
+    footprints: []
+  });
+  secondDefinitionState.definitions.categories.push({
+    id: "category-second",
+    name: "İkinci kategori",
+    footprintMode: "required",
+    footprints: ["SOIC-8"]
+  });
+  firstDefinitionClient.save(firstDefinitionState);
+  secondDefinitionClient.save(secondDefinitionState);
+  await Promise.all([
+    firstDefinitionClient.flush(),
+    secondDefinitionClient.flush()
+  ]);
+  assert.deepEqual(
+    valueAtPath("appState/definitions/categories").map(function (category) {
+      return category.id;
+    }).sort(),
+    ["category-first", "category-second"]
+  );
+
+  // Toplu JSON içe aktarma çağrısı ancak Firebase yazısı tamamlandıktan sonra
+  // çözülmeli ve bağımsız kılıf kataloğunu da ortak veriye taşımalıdır.
+  const importClient = createClient();
+  await importClient.initialize();
+  const importSession = await importClient.signIn("recepic", "demo123");
+  const importedState = await importClient.replace({
+    schemaVersion: 6,
+    users: importSession.users,
+    tables: [{ id: "table-import", name: "İçe Aktarılan", items: [] }],
+    logs: [],
+    definitions: {
+      categories: [{
+        id: "category-import",
+        name: "İçe aktarma kategorisi",
+        footprintMode: "optional",
+        footprints: ["TEST-8"]
+      }],
+      footprints: ["TEST-8", "TEST-16"]
+    },
+    session: importSession.session,
+    settings: importSession.settings
+  });
+  assert.equal(importedState.tables[0].id, "table-import");
+  assert.deepEqual(valueAtPath("appState/definitions/footprints"), ["TEST-8", "TEST-16"]);
+
+  console.log("OK: Kullanıcılar, yetkiler, import, katalog ve eşzamanlı stok kayıtları kararlı.");
 }()).catch(function (error) {
   console.error(error);
   process.exitCode = 1;

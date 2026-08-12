@@ -34,7 +34,8 @@ saklayan stok takip uygulamasıdır.
 3. Firebase Realtime Database kurallarını `firebase-database-rules.json`
    içeriğiyle güncelleyin. Bu adım yapılmazsa kategori tanımları kaydedilemez.
 4. Uygulamada yönetici hesabıyla `Dosya > JSON içe aktar` yolunu kullanıp
-   `arge-numune-depo-yedek-2026-08-10-combobox.json` dosyasını bir kez aktarın.
+   `arge-numune-depo-yedek-2026-08-11-kategoriler-duzenlenmis.json` dosyasını
+   bir kez aktarın.
 5. GitHub Pages yayımlaması tamamlandıktan sonra sayfayı `Ctrl+F5` ile yenileyin.
 
 `index.html` içindeki dosya sürüm etiketleri tarayıcı önbelleğini yeniler.
