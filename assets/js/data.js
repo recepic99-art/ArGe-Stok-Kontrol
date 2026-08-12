@@ -27,7 +27,7 @@
     });
 
     const initialState = {
-      schemaVersion: 6,
+      schemaVersion: 7,
       users: [
         { id: "u-recep", username: "recep", name: "Recep İç", role: "admin" }
       ],

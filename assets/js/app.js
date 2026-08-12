@@ -23,7 +23,6 @@
     suppressColumnClick: false,
     definitionView: "categories",
     definitionCategoryId: "",
-    definitionDraftFootprints: new Set(),
     definitionFootprint: ""
   };
 
@@ -826,31 +825,18 @@
   }
 
   function footprintComboOptions() {
-    const category = categoryDefinition($("item-category").value);
-    const preferred = category ? category.footprints || [] : [];
-    const preferredSet = new Set(preferred);
-    return preferred.map(function (footprint) {
-      return { value: footprint, group: "Önerilen" };
-    }).concat(allDefinedFootprints().filter(function (footprint) {
-      return !preferredSet.has(footprint);
-    }).map(function (footprint) {
-      return { value: footprint, group: "Diğer kılıflar" };
-    }));
+    return allDefinedFootprints();
   }
 
-  function syncFootprintField(clearWhenHidden) {
-    const category = categoryDefinition($("item-category").value);
-    const mode = category ? category.footprintMode : "optional";
-    const hidden = mode === "hidden";
+  function syncFootprintField() {
     const input = $("item-footprint");
     const toggle = $("item-footprint-toggle");
 
-    $("item-footprint-label").hidden = hidden;
-    input.disabled = hidden;
-    toggle.disabled = hidden;
-    input.required = mode === "required";
-    input.placeholder = mode === "required" ? "Kılıf seçin (zorunlu)" : "Kılıf seçin (isteğe bağlı)";
-    if (hidden && clearWhenHidden) input.value = "";
+    $("item-footprint-label").hidden = false;
+    input.disabled = false;
+    toggle.disabled = false;
+    input.required = false;
+    input.placeholder = "Kılıf seçin (isteğe bağlı)";
     if (footprintCombo) footprintCombo.refresh();
   }
 
@@ -864,7 +850,7 @@
     $("item-unit").value = item && ["adet", "gram", "metre", "litre"].includes(item.unit) ? item.unit : "adet";
     $("item-critical").value = item ? item.critical : 0;
     $("item-description").value = item ? item.description : "";
-    syncFootprintField(false);
+    syncFootprintField();
     if (categoryCombo) categoryCombo.refresh();
     if (footprintCombo) footprintCombo.refresh();
   }
@@ -939,12 +925,6 @@
     if (!Number.isInteger(values.critical) || values.critical < 0) {
       showToast("Kritik seviye sıfır veya daha büyük bir tam sayı olmalıdır.", true);
       $("item-critical").focus();
-      return;
-    }
-    if (category.footprintMode === "hidden") values.footprint = "";
-    if (category.footprintMode === "required" && !values.footprint) {
-      showToast("Bu kategori için kılıf seçimi zorunludur.", true);
-      $("item-footprint").focus();
       return;
     }
     if (values.footprint && !allDefinedFootprints().includes(values.footprint)) {
@@ -1411,40 +1391,16 @@
     }).join("");
   }
 
-  function renderDefinitionFootprints() {
-    const query = normalizeText($("definition-footprint-search").value);
-    const values = window.DepoCatalog.uniqueSorted(
-      allDefinedFootprints().concat(Array.from(ui.definitionDraftFootprints))
-    ).filter(function (footprint) {
-      return !query || normalizeText(footprint).includes(query);
-    });
-
-    $("definition-footprint-list").innerHTML = values.length
-      ? values.map(function (footprint) {
-        return '<label class="definition-footprint-option"><input type="checkbox" ' +
-          'data-definition-footprint="' + escapeHtml(footprint) + '"' +
-          (ui.definitionDraftFootprints.has(footprint) ? " checked" : "") + "><span>" +
-          escapeHtml(footprint) + "</span></label>";
-      }).join("")
-      : '<div class="combo-empty">Tanımlı kılıf yok</div>';
-  }
-
   function loadDefinitionEditor(categoryId) {
     const category = categoryDefinitions().find(function (entry) {
       return entry.id === categoryId;
     }) || null;
     ui.definitionCategoryId = category ? category.id : "";
-    ui.definitionDraftFootprints = new Set(category ? category.footprints : []);
     $("definition-id").value = category ? category.id : "";
     $("definition-name").value = category ? category.name : "";
-    $("definition-footprint-mode").value = category ? category.footprintMode : "optional";
     $("delete-definition").hidden = !category;
-    $("definition-new-footprint").value = "";
-    $("definition-footprint-search").value = "";
     showDefinitionError("");
     renderDefinitionCategoryList();
-    renderDefinitionFootprints();
-    $("definition-footprints-section").hidden = $("definition-footprint-mode").value === "hidden";
     window.setTimeout(function () { $("definition-name").focus(); }, 0);
   }
 
@@ -1465,22 +1421,7 @@
   function closeDefinitions() {
     $("definitions-modal").hidden = true;
     ui.definitionCategoryId = "";
-    ui.definitionDraftFootprints.clear();
     ui.definitionFootprint = "";
-  }
-
-  function addDefinitionFootprint() {
-    const value = $("definition-new-footprint").value.trim();
-    if (!value) {
-      $("definition-new-footprint").focus();
-      return;
-    }
-    const existing = allDefinedFootprints().find(function (footprint) {
-      return normalizeText(footprint) === normalizeText(value);
-    });
-    ui.definitionDraftFootprints.add(existing || value);
-    $("definition-new-footprint").value = "";
-    renderDefinitionFootprints();
   }
 
   function saveDefinition(event) {
@@ -1488,7 +1429,6 @@
     if (!requireAdministrator()) return;
     const id = $("definition-id").value;
     const name = $("definition-name").value.trim();
-    const mode = $("definition-footprint-mode").value;
     const current = selectedDefinition();
 
     if (!name) {
@@ -1505,11 +1445,7 @@
 
     const definition = {
       id: id || uid("category"),
-      name: name,
-      footprintMode: ["required", "optional", "hidden"].includes(mode) ? mode : "optional",
-      footprints: mode === "hidden"
-        ? []
-        : window.DepoCatalog.uniqueSorted(Array.from(ui.definitionDraftFootprints))
+      name: name
     };
 
     if (current) {
@@ -1616,11 +1552,6 @@
 
     const definitions = state.definitions;
     if (original && normalizeText(original) !== normalizeText(name)) {
-      definitions.categories.forEach(function (category) {
-        category.footprints = (category.footprints || []).map(function (footprint) {
-          return normalizeText(footprint) === normalizeText(original) ? name : footprint;
-        });
-      });
       state.tables.forEach(function (table) {
         table.items.forEach(function (item) {
           if (normalizeText(item.footprint) === normalizeText(original)) item.footprint = name;
@@ -1652,11 +1583,6 @@
     }
     state.definitions.footprints = (state.definitions.footprints || []).filter(function (entry) {
       return normalizeText(entry) !== normalizeText(footprint);
-    });
-    state.definitions.categories.forEach(function (category) {
-      category.footprints = (category.footprints || []).filter(function (entry) {
-        return normalizeText(entry) !== normalizeText(footprint);
-      });
     });
     state.definitions = window.DepoCatalog.normalizeDefinitions(state.definitions, state.tables);
     saveState();
@@ -2070,7 +1996,6 @@
       "open-definitions": openDefinitions,
       "close-definitions": closeDefinitions,
       "new-definition": function () { loadDefinitionEditor(""); },
-      "add-definition-footprint": addDefinitionFootprint,
       "delete-definition": deleteDefinition,
       "new-global-footprint": function () { loadGlobalFootprintEditor(""); },
       "delete-global-footprint": deleteGlobalFootprint,
@@ -2311,7 +2236,7 @@
 
   $("stock-card-panel").addEventListener("submit", saveStockCard);
   $("item-category").addEventListener("change", function () {
-    syncFootprintField(true);
+    syncFootprintField();
   });
   $("movement-panel").addEventListener("submit", processMovement);
   $("movement-type").addEventListener("change", syncMovementForm);
@@ -2370,21 +2295,6 @@
   $("definition-category-list").addEventListener("click", function (event) {
     const button = event.target.closest("[data-definition-category]");
     if (button) loadDefinitionEditor(button.dataset.definitionCategory);
-  });
-  $("definition-footprint-mode").addEventListener("change", function () {
-    $("definition-footprints-section").hidden = this.value === "hidden";
-  });
-  $("definition-footprint-search").addEventListener("input", renderDefinitionFootprints);
-  $("definition-footprint-list").addEventListener("change", function (event) {
-    const checkbox = event.target.closest("[data-definition-footprint]");
-    if (!checkbox) return;
-    if (checkbox.checked) ui.definitionDraftFootprints.add(checkbox.dataset.definitionFootprint);
-    else ui.definitionDraftFootprints.delete(checkbox.dataset.definitionFootprint);
-  });
-  $("definition-new-footprint").addEventListener("keydown", function (event) {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    addDefinitionFootprint();
   });
   document.querySelector(".definitions-tabs").addEventListener("click", function (event) {
     const tab = event.target.closest("[data-definition-view]");

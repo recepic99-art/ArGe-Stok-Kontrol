@@ -494,15 +494,11 @@ function authenticatedUsers(state) {
   const secondDefinitionState = await secondDefinitionClient.signIn("ali", "demo123");
   firstDefinitionState.definitions.categories.push({
     id: "category-first",
-    name: "Birinci kategori",
-    footprintMode: "optional",
-    footprints: []
+    name: "Birinci kategori"
   });
   secondDefinitionState.definitions.categories.push({
     id: "category-second",
-    name: "İkinci kategori",
-    footprintMode: "required",
-    footprints: ["SOIC-8"]
+    name: "İkinci kategori"
   });
   firstDefinitionClient.save(firstDefinitionState);
   secondDefinitionClient.save(secondDefinitionState);
@@ -523,16 +519,14 @@ function authenticatedUsers(state) {
   await importClient.initialize();
   const importSession = await importClient.signIn("recepic", "demo123");
   const importedState = await importClient.replace({
-    schemaVersion: 6,
+    schemaVersion: 7,
     users: importSession.users,
     tables: [{ id: "table-import", name: "İçe Aktarılan", items: [] }],
     logs: [],
     definitions: {
       categories: [{
         id: "category-import",
-        name: "İçe aktarma kategorisi",
-        footprintMode: "optional",
-        footprints: ["TEST-8"]
+        name: "İçe aktarma kategorisi"
       }],
       footprints: ["TEST-8", "TEST-16"]
     },

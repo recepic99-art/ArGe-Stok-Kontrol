@@ -366,8 +366,8 @@
     <section class="modal-dialog definitions-modal" role="dialog" aria-modal="true" aria-labelledby="definitions-title">
       <div class="modal-header">
         <div>
-          <h2 id="definitions-title">Kategori ve Kılıf Tanımları</h2>
-          <p class="muted">Stok kartlarında kullanılacak ortak seçenekler</p>
+          <h2 id="definitions-title">Kategori ve Kılıf Kataloğu</h2>
+          <p class="muted">Kategori ve kılıf seçenekleri birbirinden bağımsızdır</p>
         </div>
         <button class="icon-button" data-action="close-definitions" aria-label="Kapat">×</button>
       </div>
@@ -386,26 +386,9 @@
         <form id="definition-form" class="definition-editor" autocomplete="off">
           <input id="definition-id" type="hidden">
           <label>Kategori adı<input id="definition-name" class="control" required></label>
-          <label>Kılıf alanı
-            <select id="definition-footprint-mode" class="control">
-              <option value="required">Zorunlu</option>
-              <option value="optional">İsteğe bağlı</option>
-              <option value="hidden">Gösterme</option>
-            </select>
-          </label>
-          <div id="definition-footprints-section" class="definition-footprints-section">
-            <div class="definition-section-heading">
-              <div>
-                <strong>Önerilen kılıflar</strong>
-                <span>Bu kategori seçildiğinde listenin üstünde görünür.</span>
-              </div>
-              <input id="definition-footprint-search" class="control" type="search" placeholder="Kılıf ara">
-            </div>
-            <div id="definition-footprint-list" class="definition-footprint-list"></div>
-            <div class="definition-add-footprint">
-              <input id="definition-new-footprint" class="control" placeholder="Yeni kılıf adı">
-              <button class="button button-muted" type="button" data-action="add-definition-footprint">Ekle</button>
-            </div>
+          <div class="definition-editor-intro">
+            <strong>İşlev odaklı kategori</strong>
+            <span>Mühendislerin malzemeyi ararken kullanacağı kısa ve açıklayıcı adı yazın.</span>
           </div>
           <div id="definition-error" class="inline-error" hidden></div>
           <div class="definitions-actions">
@@ -428,7 +411,7 @@
           <input id="global-footprint-original" type="hidden">
           <div class="definition-editor-intro">
             <strong>Kılıf kaydı</strong>
-            <span>Kılıfı yeniden adlandırdığınızda stok kartları ve kategori eşleştirmeleri de güncellenir.</span>
+            <span>Kılıfı yeniden adlandırdığınızda bu kılıfı kullanan stok kartları da güncellenir.</span>
           </div>
           <label>Kılıf adı<input id="global-footprint-name" class="control" required placeholder="Örn. SOIC-8"></label>
           <div id="global-footprint-error" class="inline-error" hidden></div>
@@ -451,17 +434,17 @@
   <input id="json-file-input" type="file" accept=".json,application/json" hidden>
   <input id="bom-file-input" type="file" accept=".csv,.txt,text/csv,text/plain" hidden>
 
-  <script src="assets/js/seed.js?v=catalog-2"></script>
-  <script src="assets/js/catalog.js?v=2"></script>
-  <script src="assets/js/data.js?v=catalog-2"></script>
+  <script src="assets/js/seed.js?v=catalog-3"></script>
+  <script src="assets/js/catalog.js?v=3"></script>
+  <script src="assets/js/data.js?v=catalog-3"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
   <script src="assets/js/firebase-config.js?v=firebase-4"></script>
-  <script src="firebase-store-v4.js?v=17"></script>
+  <script src="firebase-store-v4.js?v=18"></script>
   <script src="assets/vendor/dockview/dockview.min.js?v=7.0.3"></script>
   <script src="assets/js/dock-layout.js?v=6"></script>
   <script src="assets/js/combobox.js?v=2"></script>
-  <script src="assets/js/app.js?v=catalog-2"></script>
+  <script src="assets/js/app.js?v=catalog-3"></script>
 </body>
 </html>

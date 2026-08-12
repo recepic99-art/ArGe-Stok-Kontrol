@@ -1,10 +1,10 @@
 (function () {
   "use strict";
 
-  // Firebase ortak veri katmanı - v8.
+  // Firebase ortak veri katmanı - v9.
   const LOCAL_UI_KEY = "arge-numune-depo-ui-v1";
   const CLOUD_PATH = "appState";
-  const SCHEMA_VERSION = 6;
+  const SCHEMA_VERSION = 7;
 
   let database = null;
   let auth = null;

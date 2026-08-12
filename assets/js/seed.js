@@ -1,6 +1,13 @@
 window.DepoSeedState = {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "users": [
+    {
+      "id": "user-1nzLuRJA7UauOt7btWk4E5MKCny1",
+      "authUid": "1nzLuRJA7UauOt7btWk4E5MKCny1",
+      "username": "snsergn",
+      "name": "snsergn",
+      "role": "member"
+    },
     {
       "id": "user-Da467Rpq41UHYpNoS7y8EAR5tf13",
       "authUid": "Da467Rpq41UHYpNoS7y8EAR5tf13",
@@ -57,10 +64,10 @@ window.DepoSeedState = {
       "items": [
         {
           "box": "C1",
-          "category": "Capacitor",
+          "category": "Tantalum Capacitor",
           "critical": 0,
           "description": "20% 35V",
-          "footprint": "Case A",
+          "footprint": "Case A (3216-18)",
           "id": "5C4C637A",
           "name": "330nF Tantal",
           "quantity": 19,
@@ -71,7 +78,7 @@ window.DepoSeedState = {
           "box": "U2",
           "category": "Op-Amp",
           "critical": 0,
-          "description": "10mHz",
+          "description": "10 MHz",
           "footprint": "SOIC-8",
           "id": "A61A3453",
           "name": "TLV9062IDR",
@@ -119,8 +126,8 @@ window.DepoSeedState = {
           "box": "U2",
           "category": "Buck Converter",
           "critical": 0,
-          "description": "2.5A",
-          "footprint": "SOIC-8",
+          "description": "2.5 A, 3-36 V giriş",
+          "footprint": "SOIC-8 EP",
           "id": "02A87EC2",
           "name": "AOZ1283PI",
           "quantity": 3,
@@ -143,8 +150,8 @@ window.DepoSeedState = {
           "box": "U2",
           "category": "Buck Converter",
           "critical": 0,
-          "description": "4A",
-          "footprint": "SOIC-8",
+          "description": "4 A, 3-36 V giriş",
+          "footprint": "SOIC-8 EP",
           "id": "090D3685",
           "name": "AOZ1284PI",
           "quantity": 4,
@@ -287,8 +294,8 @@ window.DepoSeedState = {
           "box": "U2",
           "category": "Buck Converter",
           "critical": 0,
-          "description": "2A 3.8V",
-          "footprint": "SOIC-8",
+          "description": "2 A, 3.8-55 V giriş",
+          "footprint": "SOIC-8 EP",
           "id": "5A6A9B0E",
           "name": "MP4560DN",
           "quantity": 4,
@@ -333,9 +340,9 @@ window.DepoSeedState = {
         },
         {
           "box": "U1",
-          "category": "Buck Converter",
+          "category": "Unverified IC",
           "critical": 0,
-          "description": "",
+          "description": "LPSP5526 kodu güvenilir veri sayfasıyla eşleştirilemedi; işlev ve tam kod fiziksel parçadan doğrulanmalı.",
           "footprint": "SOIC-8",
           "id": "73933B34",
           "name": "LPSP5526",
@@ -345,10 +352,10 @@ window.DepoSeedState = {
         },
         {
           "box": "C1",
-          "category": "Capacitor",
+          "category": "Tantalum Capacitor",
           "critical": 0,
           "description": "10% 16V",
-          "footprint": "Case C",
+          "footprint": "Case C (6032-28)",
           "id": "7647F271",
           "name": "33uF Tantal",
           "quantity": 42,
@@ -396,7 +403,7 @@ window.DepoSeedState = {
           "category": "Buck Converter",
           "critical": 0,
           "description": "5 A, 36 V, 500 kHz",
-          "footprint": "SOIC-8",
+          "footprint": "PSOP-8",
           "id": "937CC076",
           "name": "RT8279",
           "quantity": 9,
@@ -468,7 +475,7 @@ window.DepoSeedState = {
           "category": "Buck Converter",
           "critical": 0,
           "description": "2 A, 6-42 V giriş",
-          "footprint": "MSOP-10",
+          "footprint": "HVSSOP-10",
           "id": "D15EA636",
           "name": "LM25011MYX",
           "quantity": 5,
@@ -528,12 +535,12 @@ window.DepoSeedState = {
           "category": "Resistor",
           "critical": 0,
           "description": "",
-          "footprint": "DIP",
+          "footprint": "THT Axial",
           "id": "043C1EEF",
           "name": "220K",
           "quantity": 35,
           "unit": "adet",
-          "updatedAt": "07.07.2026 15:57"
+          "updatedAt": "12.08.2026 11:27"
         },
         {
           "box": "U2",
@@ -552,7 +559,7 @@ window.DepoSeedState = {
           "category": "Audio Amplifier",
           "critical": 0,
           "description": "3W",
-          "footprint": "SOIC-16",
+          "footprint": "SOP-16",
           "id": "16AC1E0C",
           "name": "PAM8403DR",
           "quantity": 3,
@@ -729,7 +736,7 @@ window.DepoSeedState = {
         },
         {
           "box": "R1",
-          "category": "Resistor",
+          "category": "Resistor Network",
           "critical": 0,
           "description": "",
           "footprint": "SIP-5",
@@ -741,9 +748,9 @@ window.DepoSeedState = {
         },
         {
           "box": "U1",
-          "category": "Interface IC",
+          "category": "K-Line Transceiver",
           "critical": 0,
-          "description": "ISO 9141 uyumlu K-Line arayüz entegresi",
+          "description": "ISO 9141 uyumlu K-Line transceiver",
           "footprint": "SOIC-8",
           "id": "4ED3609B",
           "name": "L9637D K-Line Transceiver",
@@ -779,7 +786,7 @@ window.DepoSeedState = {
           "box": "U2",
           "category": "Op-Amp",
           "critical": 0,
-          "description": "12mHz",
+          "description": "12 MHz",
           "footprint": "SOT-23-5",
           "id": "5400371C",
           "name": "TS461CLT",
@@ -816,7 +823,7 @@ window.DepoSeedState = {
           "category": "Audio Amplifier",
           "critical": 0,
           "description": "Etiketsiz",
-          "footprint": "SOIC-16",
+          "footprint": "SOP-16",
           "id": "5C8FAE8C",
           "name": "PAM8403",
           "quantity": 7,
@@ -825,9 +832,9 @@ window.DepoSeedState = {
         },
         {
           "box": "U2",
-          "category": "Audio Amplifier",
+          "category": "Unverified IC",
           "critical": 0,
-          "description": "",
+          "description": "LM883MX kodu güvenilir veri sayfasıyla eşleştirilemedi; LM833MX olduğu varsayılmadı.",
           "footprint": "SOIC-8",
           "id": "6FABCE2C",
           "name": "LM883MX",
@@ -842,7 +849,7 @@ window.DepoSeedState = {
           "description": "",
           "footprint": "SOP-24",
           "id": "70C618F0",
-          "name": "AIP1668EO",
+          "name": "AiP1668EO LED Display Driver",
           "quantity": 4,
           "unit": "adet",
           "updatedAt": "07.07.2026 15:57"
@@ -887,7 +894,7 @@ window.DepoSeedState = {
           "box": "U1",
           "category": "LDO Regulator",
           "critical": 0,
-          "description": "1A 5V",
+          "description": "800 mA, 5 V",
           "footprint": "TO-252 (DPAK)",
           "id": "80E0FF72",
           "name": "LM1117",
@@ -897,9 +904,9 @@ window.DepoSeedState = {
         },
         {
           "box": "U2",
-          "category": "Audio Amplifier",
+          "category": "Unverified IC",
           "critical": 0,
-          "description": "",
+          "description": "LM4262MAX kodu güvenilir veri sayfasıyla eşleştirilemedi; LM4862 olduğu varsayılmadı.",
           "footprint": "SOIC-8",
           "id": "811BFFFC",
           "name": "LM4262MAX",
@@ -1032,7 +1039,7 @@ window.DepoSeedState = {
           "category": "Audio Amplifier",
           "critical": 0,
           "description": "",
-          "footprint": "SOIC-8",
+          "footprint": "SOP-8 EP",
           "id": "B5D7757E",
           "name": "ISD8101SYI",
           "quantity": 4,
@@ -1055,8 +1062,8 @@ window.DepoSeedState = {
           "box": "U2",
           "category": "Op-Amp",
           "critical": 0,
-          "description": "",
-          "footprint": "SO-8",
+          "description": "1 MHz",
+          "footprint": "SOP-8 (PS)",
           "id": "BA9071F9",
           "name": "UA741CPSR",
           "quantity": 13,
@@ -1092,7 +1099,7 @@ window.DepoSeedState = {
           "category": "Buzzer",
           "critical": 0,
           "description": "Etiketsiz",
-          "footprint": "DIP",
+          "footprint": "THT",
           "id": "E0D35248",
           "name": "22mm Buzzer",
           "quantity": 8,
@@ -1115,7 +1122,7 @@ window.DepoSeedState = {
           "box": "U1",
           "category": "Op-Amp",
           "critical": 0,
-          "description": "10mHz",
+          "description": "10 MHz; tam paket soneki fiziksel parçadan doğrulanmalı",
           "footprint": "SOIC-8",
           "id": "E669A06E",
           "name": "MCP6022T",
@@ -1125,12 +1132,12 @@ window.DepoSeedState = {
         },
         {
           "box": "A1",
-          "category": "Sensor",
+          "category": "IR Receiver",
           "critical": 0,
-          "description": "38kHz IR Alıcı Sensör",
-          "footprint": "3-pin THT",
+          "description": "38 kHz kızılötesi uzaktan kumanda alıcısı",
+          "footprint": "THT",
           "id": "E8335D19",
-          "name": "TSOP2238 IR Receiver Sensor",
+          "name": "TSOP2238 38kHz IR Receiver",
           "quantity": 5,
           "unit": "adet",
           "updatedAt": "07.07.2026 15:57"
@@ -1151,7 +1158,7 @@ window.DepoSeedState = {
           "box": "U2",
           "category": "Op-Amp",
           "critical": 0,
-          "description": "5mHz",
+          "description": "5 MHz",
           "footprint": "SOIC-8",
           "id": "EEB8F74B",
           "name": "MC33178DR2G",
@@ -1188,19 +1195,19 @@ window.DepoSeedState = {
           "category": "Resistor",
           "critical": 0,
           "description": "1W veya üstü, etiketsiz",
-          "footprint": "DIP",
+          "footprint": "THT Axial",
           "id": "0E761624",
           "name": "1R",
           "quantity": 13,
           "unit": "adet",
-          "updatedAt": "07.07.2026 15:57"
+          "updatedAt": "12.08.2026 11:26"
         },
         {
           "box": "R1",
           "category": "Trimpot",
           "critical": 0,
           "description": "",
-          "footprint": "63M Horizontal THT",
+          "footprint": "THT",
           "id": "161AF02C",
           "name": "500K POT Seramik",
           "quantity": 30,
@@ -1272,12 +1279,12 @@ window.DepoSeedState = {
           "category": "Resistor",
           "critical": 0,
           "description": "1W",
-          "footprint": "DIP",
+          "footprint": "THT Axial",
           "id": "249A9FA9",
           "name": "3R3",
           "quantity": 16,
           "unit": "adet",
-          "updatedAt": "07.07.2026 15:57"
+          "updatedAt": "12.08.2026 11:27"
         },
         {
           "box": "B1",
@@ -1464,12 +1471,12 @@ window.DepoSeedState = {
           "category": "Resistor",
           "critical": 0,
           "description": "1W veya üstü, etiketsiz.",
-          "footprint": "DIP",
+          "footprint": "THT Axial",
           "id": "51EFE9B3",
           "name": "4R7",
           "quantity": 28,
           "unit": "adet",
-          "updatedAt": "07.07.2026 15:57"
+          "updatedAt": "12.08.2026 11:27"
         },
         {
           "box": "R1",
@@ -1557,12 +1564,12 @@ window.DepoSeedState = {
         },
         {
           "box": "M1",
-          "category": "Wireless Module",
+          "category": "Wi-Fi/Bluetooth Module",
           "critical": 0,
-          "description": "",
+          "description": "Çift bant Wi-Fi ve Bluetooth modülü; 12 x 12 mm",
           "footprint": "SMD Module",
           "id": "7CFBE78F",
-          "name": "AP6256",
+          "name": "AP6256 Wi-Fi/Bluetooth Module",
           "quantity": 2,
           "unit": "adet",
           "updatedAt": "07.07.2026 15:57"
@@ -1608,12 +1615,12 @@ window.DepoSeedState = {
           "category": "Resistor",
           "critical": 0,
           "description": "",
-          "footprint": "DIP",
+          "footprint": "THT Axial",
           "id": "8B4322C9",
           "name": "330K",
           "quantity": 20,
           "unit": "adet",
-          "updatedAt": "07.07.2026 15:57"
+          "updatedAt": "12.08.2026 11:27"
         },
         {
           "box": "D1",
@@ -1668,12 +1675,12 @@ window.DepoSeedState = {
           "category": "Resistor",
           "critical": 0,
           "description": "",
-          "footprint": "DIP",
+          "footprint": "THT Axial",
           "id": "9F38B5BD",
           "name": "1R",
           "quantity": 40,
           "unit": "adet",
-          "updatedAt": "29.07.2026 10:35"
+          "updatedAt": "12.08.2026 11:27"
         },
         {
           "box": "B1",
@@ -1704,19 +1711,19 @@ window.DepoSeedState = {
           "category": "Resistor",
           "critical": 0,
           "description": "",
-          "footprint": "DIP",
+          "footprint": "THT Axial",
           "id": "A620391B",
           "name": "1M",
           "quantity": 17,
           "unit": "adet",
-          "updatedAt": "07.07.2026 15:57"
+          "updatedAt": "12.08.2026 11:26"
         },
         {
           "box": "R1",
           "category": "Trimpot",
           "critical": 0,
           "description": "",
-          "footprint": "WH06 THT",
+          "footprint": "THT",
           "id": "A9AE191D",
           "name": "10K POT Carbon",
           "quantity": 24,
@@ -1764,7 +1771,7 @@ window.DepoSeedState = {
           "category": "Schottky Diode",
           "critical": 0,
           "description": "5A 100V",
-          "footprint": "DO-214AC (SMA)",
+          "footprint": "DO-214AB (SMC)",
           "id": "B9CA218A",
           "name": "SS510",
           "quantity": 7,
@@ -1776,7 +1783,7 @@ window.DepoSeedState = {
           "category": "Zener Diode",
           "critical": 0,
           "description": "5W",
-          "footprint": "DO-201 (THT)",
+          "footprint": "DO-201",
           "id": "B9D2713E",
           "name": "22V Zener 1N5358",
           "quantity": 63,
@@ -1893,12 +1900,12 @@ window.DepoSeedState = {
         },
         {
           "box": "M1",
-          "category": "Microcontroller",
+          "category": "Wi-Fi/Bluetooth MCU Module",
           "critical": 0,
           "description": "Dahili PCB anten var",
           "footprint": "SMD Module",
           "id": "D374A765",
-          "name": "ESP32-WROOM-32E",
+          "name": "ESP32-WROOM-32E Wi-Fi/Bluetooth MCU Module",
           "quantity": 10,
           "unit": "adet",
           "updatedAt": "07.07.2026 15:57"
@@ -1944,7 +1951,7 @@ window.DepoSeedState = {
           "category": "Zener Diode",
           "critical": 0,
           "description": "5W 9.1V",
-          "footprint": "DO-201 (THT)",
+          "footprint": "DO-201",
           "id": "E3D10BC8",
           "name": "1N5346B",
           "quantity": 24,
@@ -2040,7 +2047,7 @@ window.DepoSeedState = {
           "category": "Schottky Diode",
           "critical": 0,
           "description": "3A 100V",
-          "footprint": "DO-214AC (SMA)",
+          "footprint": "DO-214AB (SMC)",
           "id": "F8605933",
           "name": "SS310",
           "quantity": 25,
@@ -2073,10 +2080,10 @@ window.DepoSeedState = {
         },
         {
           "box": "C1",
-          "category": "Capacitor",
+          "category": "Tantalum Capacitor",
           "critical": 0,
           "description": "10% 35V",
-          "footprint": "Case A",
+          "footprint": "Case A (3216-18)",
           "id": "NUM0170",
           "name": "330nF Tantal",
           "quantity": 19,
@@ -2121,10 +2128,10 @@ window.DepoSeedState = {
         },
         {
           "box": "C1",
-          "category": "Capacitor",
+          "category": "Tantalum Capacitor",
           "critical": 0,
           "description": "10% 10V",
-          "footprint": "Case B",
+          "footprint": "Case B (3528-21)",
           "id": "NUM0174",
           "name": "47uF Tantal",
           "quantity": 10,
@@ -2244,7 +2251,7 @@ window.DepoSeedState = {
           "category": "Trimpot",
           "critical": 0,
           "description": "20%; Ölçü: 15 mm",
-          "footprint": "Horizontal THT",
+          "footprint": "THT",
           "id": "NUM0184",
           "name": "1M POT Carbon",
           "quantity": 20,
@@ -2256,7 +2263,7 @@ window.DepoSeedState = {
           "category": "Trimpot",
           "critical": 0,
           "description": "Ölçü: 10 mm",
-          "footprint": "Horizontal THT",
+          "footprint": "THT",
           "id": "NUM0185",
           "name": "470K POT Carbon",
           "quantity": 8,
@@ -2268,7 +2275,7 @@ window.DepoSeedState = {
           "category": "Relay",
           "critical": 0,
           "description": "TIANBO HJR-3FF-S-Z, 24VDC coil, SPDT / 1 Form C PCB relay, 10A 120VAC / 7A 240VAC / 5A 240VAC contact rating.",
-          "footprint": "THT PCB Relay",
+          "footprint": "THT",
           "id": "NUM0186",
           "name": "HJR-3FF-S-Z 24VDC SPDT Power Relay",
           "quantity": 22,
@@ -2280,7 +2287,7 @@ window.DepoSeedState = {
           "category": "Relay",
           "critical": 0,
           "description": "QIANJI JQC-3F(T73), 12VDC coil PCB relay. Contact rating: 7A 250VAC / 10A 125VAC / 12A 120VAC / 10A 28VDC. Contact form should be verified by pin count: 5-pin = SPDT / 1 Form C, 4-pin = SPST-NO / 1 Form A.",
-          "footprint": "THT PCB Relay",
+          "footprint": "THT",
           "id": "NUM0187",
           "name": "JQC-3F(T73)-12VDC PCB Power Relay",
           "quantity": 22,
@@ -2292,7 +2299,7 @@ window.DepoSeedState = {
           "category": "Relay",
           "critical": 0,
           "description": "TIANBO HJR-21FF-S-Z, 12VDC coil, SPDT / 1 Form C PCB relay. Contact rating: 12A 120VAC / 10A 240VAC / 7A 240VAC, TV-5.",
-          "footprint": "THT PCB Relay",
+          "footprint": "THT",
           "id": "NUM0188",
           "name": "HJR-21FF-S-Z 12VDC SPDT Power Relay",
           "quantity": 22,
@@ -2304,7 +2311,7 @@ window.DepoSeedState = {
           "category": "Relay",
           "critical": 0,
           "description": "HELISHUN HLS-14F2L-DC12V-C, 12VDC coil, SPDT / 1 Form C, 8 pin transparent PCB relay. Contact rating: 16A 240VAC / 16A 30VDC.",
-          "footprint": "8-pin THT PCB Relay",
+          "footprint": "THT",
           "id": "NUM0189",
           "name": "HLS-14F2L-DC12V-C 16A SPDT Power Relay",
           "quantity": 5,
@@ -2316,7 +2323,7 @@ window.DepoSeedState = {
           "category": "Relay",
           "critical": 0,
           "description": "Panasonic ALQ112 A01, 12VDC coil, slim type PCB relay, SPDT / 1 Form C. Contact rating: 10A 125VAC, 5A 250VAC, 5A 30VDC; marking also shows 10A 250VAC cosφ=0.4.",
-          "footprint": "THT PCB Relay",
+          "footprint": "THT",
           "id": "NUM0190",
           "name": "ALQ112 12VDC SPDT Power Relay",
           "quantity": 10,
@@ -2328,7 +2335,7 @@ window.DepoSeedState = {
           "category": "Relay",
           "critical": 0,
           "description": "TIANBO TR5V-L-S-Z/12VDC, 12VDC coil, SPDT / 1 Form C, 6 pin THT telecom relay. Contact rating: 1A 120VAC / 24VDC, coil 720Ω, 200mW.",
-          "footprint": "6-pin THT Telecom Relay",
+          "footprint": "THT",
           "id": "NUM0191",
           "name": "TR5V-L-S-Z/12VDC Telecom Relay SPDT",
           "quantity": 8,
@@ -2340,7 +2347,7 @@ window.DepoSeedState = {
           "category": "Relay",
           "critical": 0,
           "description": "HUIKE HK23F-DC24V-SHG, 24VDC coil, SPDT / 1 Form C, DIP 12.5x7.5mm relay. Contact rating: 2A 120VAC / 2A 24VDC, coil 2.88kΩ, 200mW.",
-          "footprint": "THT PCB Relay",
+          "footprint": "THT",
           "id": "NUM0192",
           "name": "HK23F-DC24V-SHG SPDT Power Relay",
           "quantity": 17,
@@ -2373,7 +2380,7 @@ window.DepoSeedState = {
         },
         {
           "box": "YENİ1",
-          "category": "Resistor",
+          "category": "Shunt Resistor",
           "critical": 0,
           "description": "VMS-R056-1.0-U",
           "footprint": "2512",
@@ -2400,7 +2407,7 @@ window.DepoSeedState = {
           "category": "Connector",
           "critical": 0,
           "description": "",
-          "footprint": "Right-angle THT",
+          "footprint": "THT",
           "id": "NUM0197",
           "name": "USB Type-B Right-Angle",
           "quantity": 20,
@@ -2435,8 +2442,8 @@ window.DepoSeedState = {
           "box": "YENİ1",
           "category": "Connector",
           "critical": 0,
-          "description": "L-KLS12-TL058-1X1-G/Y-03",
-          "footprint": "Right-angle THT",
+          "description": "L-KLS12-TL058-1X1-G/Y-03; yatay THT montaj",
+          "footprint": "THT",
           "id": "NUM0200",
           "name": "Ethernet Jack",
           "quantity": 10,
@@ -2445,7 +2452,7 @@ window.DepoSeedState = {
         },
         {
           "box": "YENİ1",
-          "category": "Resistor",
+          "category": "Shunt Resistor",
           "critical": 0,
           "description": "VMS-R039-1.0-U",
           "footprint": "2512",
@@ -2460,7 +2467,7 @@ window.DepoSeedState = {
           "category": "Power Resistor",
           "critical": 0,
           "description": "Royalohm PRW10AWIW43JB00, 4.3Ω, 10W, ±5%, wirewound cement resistor, THT axial type.",
-          "footprint": "THT Cement Resistor",
+          "footprint": "THT Axial",
           "id": "NUM0202",
           "name": "4R3 Cement Resistor",
           "quantity": 9,
@@ -2472,7 +2479,7 @@ window.DepoSeedState = {
           "category": "Power Resistor",
           "critical": 0,
           "description": "Etiketsiz",
-          "footprint": "THT Cement Resistor",
+          "footprint": "THT Axial",
           "id": "NUM0203",
           "name": "2R2 Cement Resistor",
           "quantity": 12,
@@ -2495,8 +2502,8 @@ window.DepoSeedState = {
           "box": "YENİ2",
           "category": "Connector",
           "critical": 0,
-          "description": "",
-          "footprint": "Straight THT",
+          "description": "Düz THT montaj",
+          "footprint": "THT",
           "id": "NUM0205",
           "name": "USB Type-C",
           "quantity": 18,
@@ -2544,7 +2551,7 @@ window.DepoSeedState = {
           "category": "LED",
           "critical": 0,
           "description": "FYL-5019RGBC1C-CC",
-          "footprint": "DIP",
+          "footprint": "THT",
           "id": "NUM0209",
           "name": "5mm RGB LED",
           "quantity": 7,
@@ -2580,7 +2587,7 @@ window.DepoSeedState = {
           "category": "MOSFET",
           "critical": 0,
           "description": "30A 60V",
-          "footprint": "PowerPAK SO-8",
+          "footprint": "PowerPAK SO-8L",
           "id": "NUM0212",
           "name": "SQJB60EP-T1",
           "quantity": 6,
@@ -2628,7 +2635,7 @@ window.DepoSeedState = {
           "category": "Crystal",
           "critical": 0,
           "description": "16pF; Ölçü: 3.2 x 2.5 mm",
-          "footprint": "SMD",
+          "footprint": "3225",
           "id": "NUM0216",
           "name": "12 MHz Crystal",
           "quantity": 26,
@@ -2652,7 +2659,7 @@ window.DepoSeedState = {
           "category": "Switch",
           "critical": 0,
           "description": "",
-          "footprint": "DIP",
+          "footprint": "THT",
           "id": "NUM0218",
           "name": "3 Position DIP Switch",
           "quantity": 8,
@@ -2664,7 +2671,7 @@ window.DepoSeedState = {
           "category": "Relay",
           "critical": 0,
           "description": "Panasonic ALQ124A01, 24VDC coil, slim PCB power relay, SPDT / 1 Form C. Contact rating: 10A 250VAC, 1 Form C.",
-          "footprint": "THT PCB Relay",
+          "footprint": "THT",
           "id": "NUM0219",
           "name": "ALQ124A01 24VDC SPDT Power Relay",
           "quantity": 5,
@@ -2688,7 +2695,7 @@ window.DepoSeedState = {
           "category": "Crystal",
           "critical": 0,
           "description": "12pF; Ölçü: 3.2 x 2.5 mm",
-          "footprint": "SMD",
+          "footprint": "3225",
           "id": "NUM0221",
           "name": "20 MHz Crystal",
           "quantity": 20,
@@ -2700,7 +2707,7 @@ window.DepoSeedState = {
           "category": "Crystal",
           "critical": 0,
           "description": "30pF",
-          "footprint": "HC-49/U THT",
+          "footprint": "HC-49/U",
           "id": "NUM0222",
           "name": "8 MHz Crystal",
           "quantity": 4,
@@ -2712,7 +2719,7 @@ window.DepoSeedState = {
           "category": "Crystal",
           "critical": 0,
           "description": "16pF",
-          "footprint": "HC-49/SM SMD",
+          "footprint": "HC-49/SM",
           "id": "NUM0223",
           "name": "8 MHz Crystal",
           "quantity": 2,
@@ -3033,12 +3040,12 @@ window.DepoSeedState = {
         },
         {
           "box": "YENİ3",
-          "category": "Current Sense IC",
+          "category": "Current Sense Amplifier",
           "critical": 0,
-          "description": "High-side akım algılama entegresi",
+          "description": "High-side akım algılama yükselteci",
           "footprint": "SOT-23",
           "id": "NUM0250",
-          "name": "ZXCT1107SA-7 Current Sense IC",
+          "name": "ZXCT1107SA-7 Current Sense Amplifier",
           "quantity": 10,
           "unit": "adet",
           "updatedAt": "06.08.2026 09:46"
@@ -3048,7 +3055,7 @@ window.DepoSeedState = {
           "category": "Reed Switch",
           "critical": 0,
           "description": "MKA-14103, normally open SPST reed switch, 1A 250V, through-hole glass body magnetic switch.",
-          "footprint": "THT Glass Reed Switch",
+          "footprint": "THT",
           "id": "NUM0251",
           "name": "MKA-14103",
           "quantity": 1,
@@ -3144,7 +3151,7 @@ window.DepoSeedState = {
           "category": "Terminal Block",
           "critical": 0,
           "description": "WAGO 250-502, 2 pole PCB terminal block, 5.00mm pitch, gray, THT mount.",
-          "footprint": "2-pin THT",
+          "footprint": "THT",
           "id": "NUM0259",
           "name": "250-502 2P PCB Terminal Block",
           "quantity": 3,
@@ -3156,7 +3163,7 @@ window.DepoSeedState = {
           "category": "Timer IC",
           "critical": 0,
           "description": "",
-          "footprint": "SO-8",
+          "footprint": "SOIC-8",
           "id": "NUM0260",
           "name": "NE555DR",
           "quantity": 2,
@@ -3168,7 +3175,7 @@ window.DepoSeedState = {
           "category": "Timer IC",
           "critical": 0,
           "description": "",
-          "footprint": "DIP-8",
+          "footprint": "PDIP-8",
           "id": "NUM0261",
           "name": "NE555P",
           "quantity": 2,
@@ -3204,7 +3211,7 @@ window.DepoSeedState = {
           "category": "Timer IC",
           "critical": 0,
           "description": "",
-          "footprint": "SO-8",
+          "footprint": "SOP-8 (PS)",
           "id": "NUM0264",
           "name": "NE555PSR",
           "quantity": 2,
@@ -3216,7 +3223,7 @@ window.DepoSeedState = {
           "category": "Timer IC",
           "critical": 0,
           "description": "UTC",
-          "footprint": "DIP-8",
+          "footprint": "PDIP-8",
           "id": "NUM0265",
           "name": "NE555L-D08-T",
           "quantity": 2,
@@ -3321,7 +3328,7 @@ window.DepoSeedState = {
         },
         {
           "box": "YENİ5",
-          "category": "Interface IC",
+          "category": "RS-485 Transceiver",
           "critical": 0,
           "description": "RS-485/RS-422 transceiver",
           "footprint": "SOIC-8",
@@ -3333,7 +3340,7 @@ window.DepoSeedState = {
         },
         {
           "box": "YENİ5",
-          "category": "Interface IC",
+          "category": "USB-UART Bridge",
           "critical": 10,
           "description": "USB-UART arayüz entegresi; tam varyant fiziksel ürün üzerinden doğrulanmalı",
           "footprint": "SOP-16",
@@ -3347,8 +3354,8 @@ window.DepoSeedState = {
           "box": "YENİ5",
           "category": "Connector",
           "critical": 0,
-          "description": "",
-          "footprint": "Horizontal THT",
+          "description": "Yatay THT montaj",
+          "footprint": "THT",
           "id": "NUM0276",
           "name": "USB Type-C",
           "quantity": 6,
@@ -3448,462 +3455,251 @@ window.DepoSeedState = {
     "categories": [
       {
         "id": "category-aluminum-electrolytic-capacitor",
-        "name": "Aluminum Electrolytic Capacitor",
-        "footprintMode": "optional",
-        "footprints": [
-          "SMD"
-        ]
+        "name": "Aluminum Electrolytic Capacitor"
       },
       {
         "id": "category-analog-switch",
-        "name": "Analog Switch",
-        "footprintMode": "required",
-        "footprints": [
-          "SOIC-14"
-        ]
+        "name": "Analog Switch"
       },
       {
         "id": "category-audio-amplifier",
-        "name": "Audio Amplifier",
-        "footprintMode": "required",
-        "footprints": [
-          "MSOP-8",
-          "SOIC-16",
-          "SOIC-8",
-          "SOP-8",
-          "SOT-26"
-        ]
+        "name": "Audio Amplifier"
       },
       {
         "id": "category-bridge-rectifier",
-        "name": "Bridge Rectifier",
-        "footprintMode": "required",
-        "footprints": [
-          "MBF"
-        ]
+        "name": "Bridge Rectifier"
       },
       {
         "id": "category-buck-converter",
-        "name": "Buck Converter",
-        "footprintMode": "required",
-        "footprints": [
-          "HSOIC-8 PowerPAD",
-          "HSOP-8",
-          "MSOP-10",
-          "SOIC-8",
-          "SOT-23-6",
-          "TO-263 (D2PAK)"
-        ]
+        "name": "Buck Converter"
       },
       {
         "id": "category-buzzer",
-        "name": "Buzzer",
-        "footprintMode": "optional",
-        "footprints": [
-          "DIP"
-        ]
+        "name": "Buzzer"
       },
       {
         "id": "category-capacitor",
-        "name": "Capacitor",
-        "footprintMode": "required",
-        "footprints": [
-          "0603",
-          "0805",
-          "1206",
-          "Case A",
-          "Case B",
-          "Case C"
-        ]
+        "name": "Capacitor"
       },
       {
         "id": "category-connector",
-        "name": "Connector",
-        "footprintMode": "optional",
-        "footprints": [
-          "Horizontal THT",
-          "Micro-SIM",
-          "Right-angle THT",
-          "SMD",
-          "Straight THT"
-        ]
+        "name": "Connector"
       },
       {
         "id": "category-crystal",
-        "name": "Crystal",
-        "footprintMode": "required",
-        "footprints": [
-          "HC-49/SM SMD",
-          "HC-49/U THT",
-          "SMD"
-        ]
+        "name": "Crystal"
       },
       {
-        "id": "category-current-sense-ic",
-        "name": "Current Sense IC",
-        "footprintMode": "required",
-        "footprints": [
-          "SOT-23"
-        ]
+        "id": "category-current-sense-amplifier",
+        "name": "Current Sense Amplifier"
       },
       {
         "id": "category-development-board",
-        "name": "Development Board",
-        "footprintMode": "hidden",
-        "footprints": []
+        "name": "Development Board"
       },
       {
         "id": "category-development-tool",
-        "name": "Development Tool",
-        "footprintMode": "hidden",
-        "footprints": []
+        "name": "Development Tool"
       },
       {
         "id": "category-encoder",
-        "name": "Encoder",
-        "footprintMode": "required",
-        "footprints": [
-          "THT"
-        ]
+        "name": "Encoder"
       },
       {
         "id": "category-ferrite-bead",
-        "name": "Ferrite Bead",
-        "footprintMode": "required",
-        "footprints": [
-          "0603",
-          "0805"
-        ]
+        "name": "Ferrite Bead"
       },
       {
         "id": "category-inductor",
-        "name": "Inductor",
-        "footprintMode": "required",
-        "footprints": [
-          "SMD"
-        ]
+        "name": "Inductor"
       },
       {
         "id": "category-interface-converter",
-        "name": "Interface Converter",
-        "footprintMode": "hidden",
-        "footprints": []
+        "name": "Interface Converter"
       },
       {
-        "id": "category-interface-ic",
-        "name": "Interface IC",
-        "footprintMode": "required",
-        "footprints": [
-          "SOIC-8",
-          "SOP-16"
-        ]
+        "id": "category-ir-receiver",
+        "name": "IR Receiver"
+      },
+      {
+        "id": "category-k-line-transceiver",
+        "name": "K-Line Transceiver"
       },
       {
         "id": "category-lcd",
-        "name": "LCD",
-        "footprintMode": "optional",
-        "footprints": []
+        "name": "LCD"
       },
       {
         "id": "category-ldo-regulator",
-        "name": "LDO Regulator",
-        "footprintMode": "required",
-        "footprints": [
-          "SOT-223",
-          "TO-252 (DPAK)",
-          "TO-263 (D2PAK)"
-        ]
+        "name": "LDO Regulator"
       },
       {
         "id": "category-led",
-        "name": "LED",
-        "footprintMode": "optional",
-        "footprints": [
-          "DIP"
-        ]
+        "name": "LED"
       },
       {
         "id": "category-led-display-driver",
-        "name": "LED Display Driver",
-        "footprintMode": "required",
-        "footprints": [
-          "SOP-24",
-          "SOP-28"
-        ]
+        "name": "LED Display Driver"
       },
       {
         "id": "category-linear-regulator",
-        "name": "Linear Regulator",
-        "footprintMode": "required",
-        "footprints": [
-          "TO-263 (D2PAK)"
-        ]
+        "name": "Linear Regulator"
       },
       {
         "id": "category-logic-gate",
-        "name": "Logic Gate",
-        "footprintMode": "required",
-        "footprints": [
-          "TSSOP-14"
-        ]
+        "name": "Logic Gate"
       },
       {
         "id": "category-microcontroller",
-        "name": "Microcontroller",
-        "footprintMode": "required",
-        "footprints": [
-          "LQFP-64",
-          "PDIP-40",
-          "SMD Module",
-          "SSOP-28"
-        ]
+        "name": "Microcontroller"
       },
       {
         "id": "category-mosfet",
-        "name": "MOSFET",
-        "footprintMode": "required",
-        "footprints": [
-          "PowerPAK SO-8",
-          "SOIC-8",
-          "SOT-223",
-          "SOT-23",
-          "SOT-23-6",
-          "TO-252 (DPAK)"
-        ]
+        "name": "MOSFET"
       },
       {
         "id": "category-op-amp",
-        "name": "Op-Amp",
-        "footprintMode": "required",
-        "footprints": [
-          "SO-8",
-          "SOIC-14",
-          "SOIC-8",
-          "SOT-23-5",
-          "VSSOP-8"
-        ]
+        "name": "Op-Amp"
       },
       {
         "id": "category-optocoupler",
-        "name": "Optocoupler",
-        "footprintMode": "required",
-        "footprints": [
-          "SO-6 (4-pin)",
-          "SOP-4"
-        ]
+        "name": "Optocoupler"
       },
       {
         "id": "category-power-resistor",
-        "name": "Power Resistor",
-        "footprintMode": "required",
-        "footprints": [
-          "THT Cement Resistor"
-        ]
+        "name": "Power Resistor"
       },
       {
         "id": "category-rectifier-diode",
-        "name": "Rectifier Diode",
-        "footprintMode": "required",
-        "footprints": [
-          "DO-214AB (SMC)"
-        ]
+        "name": "Rectifier Diode"
       },
       {
         "id": "category-reed-switch",
-        "name": "Reed Switch",
-        "footprintMode": "optional",
-        "footprints": [
-          "THT Glass Reed Switch"
-        ]
+        "name": "Reed Switch"
       },
       {
         "id": "category-relay",
-        "name": "Relay",
-        "footprintMode": "optional",
-        "footprints": [
-          "6-pin THT Telecom Relay",
-          "8-pin THT PCB Relay",
-          "THT PCB Relay"
-        ]
+        "name": "Relay"
       },
       {
         "id": "category-resettable-fuse",
-        "name": "Resettable Fuse",
-        "footprintMode": "required",
-        "footprints": [
-          "0603",
-          "0805",
-          "1206"
-        ]
+        "name": "Resettable Fuse"
       },
       {
         "id": "category-resistor",
-        "name": "Resistor",
-        "footprintMode": "required",
-        "footprints": [
-          "0603",
-          "0805",
-          "1206",
-          "2512",
-          "DIP",
-          "SIP-5"
-        ]
+        "name": "Resistor"
+      },
+      {
+        "id": "category-resistor-network",
+        "name": "Resistor Network"
+      },
+      {
+        "id": "category-rs-485-transceiver",
+        "name": "RS-485 Transceiver"
       },
       {
         "id": "category-schottky-diode",
-        "name": "Schottky Diode",
-        "footprintMode": "required",
-        "footprints": [
-          "DO-214AB (SMC)",
-          "DO-214AC (SMA)",
-          "SOD-123"
-        ]
+        "name": "Schottky Diode"
       },
       {
-        "id": "category-sensor",
-        "name": "Sensor",
-        "footprintMode": "optional",
-        "footprints": [
-          "3-pin THT"
-        ]
+        "id": "category-shunt-resistor",
+        "name": "Shunt Resistor"
       },
       {
         "id": "category-switch",
-        "name": "Switch",
-        "footprintMode": "optional",
-        "footprints": [
-          "DIP",
-          "SMD"
-        ]
+        "name": "Switch"
+      },
+      {
+        "id": "category-tantalum-capacitor",
+        "name": "Tantalum Capacitor"
       },
       {
         "id": "category-terminal-block",
-        "name": "Terminal Block",
-        "footprintMode": "optional",
-        "footprints": [
-          "2-pin THT"
-        ]
+        "name": "Terminal Block"
       },
       {
         "id": "category-timer-ic",
-        "name": "Timer IC",
-        "footprintMode": "required",
-        "footprints": [
-          "DIP-8",
-          "SO-8",
-          "SOP-8",
-          "TSSOP-8"
-        ]
+        "name": "Timer IC"
       },
       {
         "id": "category-touch-controller",
-        "name": "Touch Controller",
-        "footprintMode": "required",
-        "footprints": [
-          "SOP-24"
-        ]
+        "name": "Touch Controller"
       },
       {
         "id": "category-triac",
-        "name": "Triac",
-        "footprintMode": "required",
-        "footprints": [
-          "TO-220F",
-          "TO-220F2",
-          "TO-263 (D2PAK)"
-        ]
+        "name": "Triac"
       },
       {
         "id": "category-trimpot",
-        "name": "Trimpot",
-        "footprintMode": "optional",
-        "footprints": [
-          "63M Horizontal THT",
-          "Horizontal THT",
-          "SMD",
-          "WH06 THT"
-        ]
+        "name": "Trimpot"
       },
       {
         "id": "category-tvs-diode",
-        "name": "TVS Diode",
-        "footprintMode": "required",
-        "footprints": [
-          "DO-214AC (SMA)",
-          "SC-70-6",
-          "SOT-23",
-          "SOT-23-6",
-          "SOT-563"
-        ]
+        "name": "TVS Diode"
       },
       {
-        "id": "category-wireless-module",
-        "name": "Wireless Module",
-        "footprintMode": "optional",
-        "footprints": [
-          "SMD Module"
-        ]
+        "id": "category-unverified-ic",
+        "name": "Unverified IC"
+      },
+      {
+        "id": "category-usb-uart-bridge",
+        "name": "USB-UART Bridge"
+      },
+      {
+        "id": "category-wi-fi-bluetooth-mcu-module",
+        "name": "Wi-Fi/Bluetooth MCU Module"
+      },
+      {
+        "id": "category-wi-fi-bluetooth-module",
+        "name": "Wi-Fi/Bluetooth Module"
       },
       {
         "id": "category-zener-diode",
-        "name": "Zener Diode",
-        "footprintMode": "required",
-        "footprints": [
-          "DO-201 (THT)",
-          "DO-214AC (SMA)",
-          "SOD-123",
-          "SOD-80",
-          "SOT-23"
-        ]
+        "name": "Zener Diode"
       }
     ],
     "footprints": [
       "0603",
       "0805",
       "1206",
-      "2-pin THT",
       "2512",
-      "3-pin THT",
-      "6-pin THT Telecom Relay",
-      "63M Horizontal THT",
-      "8-pin THT PCB Relay",
-      "Case A",
-      "Case B",
-      "Case C",
-      "DIP",
-      "DIP-8",
-      "DO-201 (THT)",
+      "3225",
+      "Case A (3216-18)",
+      "Case B (3528-21)",
+      "Case C (6032-28)",
+      "DO-201",
       "DO-214AB (SMC)",
       "DO-214AC (SMA)",
-      "HC-49/SM SMD",
-      "HC-49/U THT",
-      "Horizontal THT",
+      "HC-49/SM",
+      "HC-49/U",
       "HSOIC-8 PowerPAD",
       "HSOP-8",
+      "HVSSOP-10",
       "LQFP-64",
       "MBF",
       "Micro-SIM",
-      "MSOP-10",
       "MSOP-8",
       "PDIP-40",
-      "PowerPAK SO-8",
-      "Right-angle THT",
+      "PDIP-8",
+      "PowerPAK SO-8L",
+      "PSOP-8",
       "SC-70-6",
       "SIP-5",
       "SMD",
       "SMD Module",
       "SO-6 (4-pin)",
-      "SO-8",
       "SOD-123",
       "SOD-80",
       "SOIC-14",
-      "SOIC-16",
       "SOIC-8",
+      "SOIC-8 EP",
       "SOP-16",
       "SOP-24",
       "SOP-28",
       "SOP-4",
       "SOP-8",
+      "SOP-8 EP",
+      "SOP-8 (PS)",
       "SOT-223",
       "SOT-23",
       "SOT-23-5",
@@ -3911,19 +3707,15 @@ window.DepoSeedState = {
       "SOT-26",
       "SOT-563",
       "SSOP-28",
-      "Straight THT",
       "THT",
-      "THT Cement Resistor",
-      "THT Glass Reed Switch",
-      "THT PCB Relay",
+      "THT Axial",
       "TO-220F",
       "TO-220F2",
       "TO-252 (DPAK)",
       "TO-263 (D2PAK)",
       "TSSOP-14",
       "TSSOP-8",
-      "VSSOP-8",
-      "WH06 THT"
+      "VSSOP-8"
     ]
   },
   "session": {
