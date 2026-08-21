@@ -1592,6 +1592,14 @@ body.is-resizing-column * {
   border-bottom: 1px solid var(--border);
 }
 
+#definitions-columns-pane .definitions-sidebar-toolbar {
+  grid-template-columns: minmax(0, 1fr) 36px;
+}
+
+#definition-column-table {
+  grid-column: 1 / -1;
+}
+
 .definition-category-list {
   overflow: auto;
   padding: 5px;
@@ -1721,6 +1729,30 @@ body.is-resizing-column * {
   padding: 8px;
   border-radius: 6px;
   cursor: pointer;
+}
+
+.column-editor-row {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+}
+
+.column-editor-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.column-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 
 .column-option:hover {

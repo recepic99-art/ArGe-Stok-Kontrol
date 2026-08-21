@@ -1,0 +1,20 @@
+127.0.0.1 - - [10/Aug/2026 11:40:42] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2026 11:40:42] "GET /assets/js/seed.js?v=catalog-1 HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2026 11:40:42] "GET /assets/js/data.js?v=catalog-1 HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2026 11:40:42] "GET /assets/js/catalog.js?v=1 HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2026 11:40:42] "GET /assets/css/app.css?v=session-17 HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2026 11:40:42] "GET /assets/vendor/dockview/dockview.css?v=7.0.3 HTTP/1.1" 304 -
+127.0.0.1 - - [10/Aug/2026 11:40:42] "GET /firebase-store-v4.js?v=16 HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2026 11:40:42] "GET /assets/js/app.js?v=catalog-1 HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2026 11:40:42] "GET /assets/js/combobox.js?v=1 HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2026 11:40:42] "GET /assets/js/firebase-config.js?v=firebase-4 HTTP/1.1" 304 -
+127.0.0.1 - - [10/Aug/2026 11:40:42] "GET /assets/js/dock-layout.js?v=6 HTTP/1.1" 304 -
+127.0.0.1 - - [10/Aug/2026 11:40:42] "GET /assets/vendor/dockview/dockview.min.js?v=7.0.3 HTTP/1.1" 304 -
+127.0.0.1 - - [10/Aug/2026 11:40:42] code 404, message File not found
+127.0.0.1 - - [10/Aug/2026 11:40:42] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [10/Aug/2026 11:42:19] "GET /test-index.html HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2026 11:42:19] "GET /assets/css/app.css?v=session-17 HTTP/1.1" 304 -
+127.0.0.1 - - [10/Aug/2026 11:42:19] "GET /assets/js/seed.js?v=catalog-1 HTTP/1.1" 304 -
+127.0.0.1 - - [10/Aug/2026 11:42:19] "GET /tools/mock-store.js?v=1 HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2026 11:42:19] "GET /assets/js/catalog.js?v=1 HTTP/1.1" 304 -
+127.0.0.1 - - [10/Aug/2026 11:42:19] "GET /assets/js/app.js?v=catalog-1 HTTP/1.1" 304 -

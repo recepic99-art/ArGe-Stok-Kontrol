@@ -23,7 +23,9 @@
     suppressColumnClick: false,
     definitionView: "categories",
     definitionCategoryId: "",
-    definitionFootprint: ""
+    definitionFootprint: "",
+    definitionTableId: "",
+    definitionColumnKey: ""
   };
 
   let categoryCombo = null;
@@ -48,6 +50,19 @@
     quantity: 90,
     unit: 85,
     critical: 110,
+    description: 230,
+    updatedAt: 145
+  };
+
+  const qualityDefaultColumnWidths = {
+    materialName: 180,
+    supplier: 150,
+    incomingQuantity: 105,
+    sampleQuantity: 110,
+    controlMethod: 220,
+    approvalStatus: 120,
+    checkedBy: 130,
+    checkedAt: 130,
     description: 230,
     updatedAt: 145
   };
@@ -201,6 +216,78 @@
     }) || null;
   }
 
+  function tableKind(table) {
+    if (!table) return "stock";
+    if (table.kind) return table.kind;
+    return normalizeText(table.name).includes("kalitekontrol") ? "quality" : "stock";
+  }
+
+  function defaultColumnsForKind(kind) {
+    const definitions = kind === "quality"
+      ? window.DepoData.qualityColumnDefinitions
+      : window.DepoData.stockColumnDefinitions;
+    return definitions.map(function (column) {
+      return {
+        key: column.key,
+        label: column.label,
+        visible: true,
+        width: (kind === "quality" ? qualityDefaultColumnWidths : defaultColumnWidths)[column.key] || 120,
+        system: true,
+        numeric: Boolean(column.numeric)
+      };
+    });
+  }
+
+  function ensureTableColumns(table) {
+    if (!table) return [];
+    const kind = tableKind(table);
+    table.kind = kind;
+    const defaults = defaultColumnsForKind(kind);
+    const existingLooksLikeStock = kind === "quality" && Array.isArray(table.columns) &&
+      table.columns.some(function (column) { return ["category", "footprint", "critical"].includes(column.key); }) &&
+      !table.columns.some(function (column) { return column.key === "materialName"; });
+    const existing = Array.isArray(table.columns) && table.columns.length && !existingLooksLikeStock
+      ? table.columns
+      : (kind === "stock"
+        ? state.settings.columnOrder.map(function (key) {
+          const column = columnMap.get(key);
+          return column ? {
+            key: key,
+            label: column.label,
+            visible: state.settings.visibleColumns.includes(key),
+        width: (state.settings.columnWidths || {})[key] || defaultColumnWidths[key] || 120,
+            system: true,
+            numeric: Boolean(column.numeric)
+          } : null;
+        }).filter(Boolean)
+        : defaults);
+    const byKey = new Map(existing.map(function (column) { return [column.key, column]; }));
+    defaults.forEach(function (column) {
+      if (!byKey.has(column.key)) existing.push(column);
+    });
+    table.columns = existing.map(function (column) {
+      const fallback = byKey.get(column.key) || defaults.find(function (entry) { return entry.key === column.key; }) || {};
+      return {
+        key: column.key,
+        label: column.label || fallback.label || column.key,
+        visible: column.visible !== false,
+        width: Math.max(55, Number(column.width) || fallback.width || 120),
+        system: column.system !== false,
+        numeric: Boolean(column.numeric || fallback.numeric)
+      };
+    });
+    return table.columns;
+  }
+
+  function activeTableKind() {
+    const active = activeTableReference();
+    return active ? tableKind(active.table) : "stock";
+  }
+
+  function stockLikeActiveTable() {
+    return activeTableKind() === "stock";
+  }
+
   function categoryDefinitions() {
     return state.definitions && Array.isArray(state.definitions.categories)
       ? state.definitions.categories
@@ -228,6 +315,10 @@
     if (state.session.activeTableId && !state.session.openTableIds.includes(state.session.activeTableId)) {
       state.session.activeTableId = "";
     }
+
+    state.tables.forEach(function (table) {
+      ensureTableColumns(table);
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -620,13 +711,17 @@
 
   function savedColumnWidth(group, key) {
     ensureColumnWidthSettings();
+    const active = activeTableReference();
+    const tableColumn = active && group !== "history"
+      ? ensureTableColumns(active.table).find(function (column) { return column.key === key; })
+      : null;
     const widths = group === "history"
       ? state.settings.historyColumnWidths
       : state.settings.columnWidths;
     const fallback = group === "history"
       ? defaultHistoryColumnWidths[key]
-      : defaultColumnWidths[key];
-    return Math.max(55, Number(widths[key]) || fallback || 100);
+      : (activeTableKind() === "quality" ? qualityDefaultColumnWidths[key] : defaultColumnWidths[key]);
+    return Math.max(55, Number(tableColumn && tableColumn.width) || Number(widths[key]) || fallback || 100);
   }
 
   function columnWidthStyle(group, key) {
@@ -635,19 +730,19 @@
   }
 
   function orderedVisibleColumns() {
-    const visible = new Set(state.settings.visibleColumns);
-    return state.settings.columnOrder
-      .filter(function (key) { return visible.has(key) && columnMap.has(key); })
-      .map(function (key) { return columnMap.get(key); });
+    const active = activeTableReference();
+    if (!active) return [];
+    return ensureTableColumns(active.table).filter(function (column) {
+      return column.visible !== false;
+    });
   }
 
   function fuzzyMatch(query, item) {
     if (!query) return true;
     const normalizedQuery = normalizeText(query);
-    const fields = [
-      item.id, item.name, item.category, item.footprint,
-      item.box, item.description
-    ].map(normalizeText);
+    const fields = Object.keys(item).map(function (key) {
+      return normalizeText(item[key]);
+    });
     if (fields.some(function (field) { return field.includes(normalizedQuery); })) return true;
 
     // Ufak yazım hatalarında, sorgu ile alanın ortak karakter oranına bakılır.
@@ -692,10 +787,15 @@
   function filteredSortedItems() {
     const active = activeTableReference();
     if (!active) return [];
+    const activeColumns = ensureTableColumns(active.table);
+    if (!activeColumns.some(function (column) { return column.key === ui.sortKey; })) {
+      ui.sortKey = (activeColumns[0] && activeColumns[0].key) || "id";
+      ui.sortDirection = "asc";
+    }
     const query = $("stock-search").value.trim();
-    const criticalOnly = $("critical-only").checked;
+    const criticalOnly = stockLikeActiveTable() && $("critical-only").checked;
     const items = active.table.items.filter(function (item) {
-      const isCritical = Number(item.quantity) <= Number(item.critical);
+      const isCritical = stockLikeActiveTable() && Number(item.quantity) <= Number(item.critical);
       return (!criticalOnly || isCritical) && fuzzyMatch(query, item);
     });
     const direction = ui.sortDirection === "asc" ? 1 : -1;
@@ -713,6 +813,7 @@
   }
 
   function stockClass(item) {
+    if (!stockLikeActiveTable()) return "";
     const quantity = Number(item.quantity) || 0;
     const critical = Number(item.critical) || 0;
     if (quantity <= critical) return " stock-critical";
@@ -731,9 +832,15 @@
 
     const columns = orderedVisibleColumns();
     const visibleItems = filteredSortedItems();
+    const activeKind = activeTableKind();
     const allVisibleChecked = visibleItems.length > 0 && visibleItems.every(function (item) {
       return ui.checkedIds.has(item.id);
     });
+    $("critical-only").closest("label").hidden = activeKind !== "stock";
+    if (activeKind !== "stock") $("critical-only").checked = false;
+    $("stock-search").placeholder = activeKind === "quality"
+      ? "Kalite kontrol kayıtlarında ara"
+      : "Malzeme adı, ID, kategori, açıklama ara";
 
     $("stock-table-head").innerHTML =
       '<th class="select-cell" data-key="select" title="Görünenlerin tümünü seç">' +
@@ -765,11 +872,12 @@
         }).join("") + "</tr>";
     }).join("");
 
-    $("stock-count").textContent = active.table.items.length + " malzeme / " + ui.checkedIds.size + " seçili";
+    $("stock-count").textContent = active.table.items.length +
+      (activeKind === "quality" ? " kayıt / " : " malzeme / ") + ui.checkedIds.size + " seçili";
   }
 
   function sortByColumn(key) {
-    if (!columnMap.has(key)) return;
+    if (!orderedVisibleColumns().some(function (column) { return column.key === key; })) return;
     if (ui.sortKey === key) {
       ui.sortDirection = ui.sortDirection === "asc" ? "desc" : "asc";
     } else {
@@ -781,41 +889,250 @@
 
   function moveColumn(draggedKey, targetKey, placeAfter) {
     if (draggedKey === targetKey) return;
-    const order = state.settings.columnOrder.filter(function (key) { return key !== draggedKey; });
-    let targetIndex = order.indexOf(targetKey);
+    const active = activeTableReference();
+    if (!active) return;
+    const columns = ensureTableColumns(active.table);
+    const dragged = columns.find(function (column) { return column.key === draggedKey; });
+    if (!dragged) return;
+    const order = columns.filter(function (column) { return column.key !== draggedKey; });
+    let targetIndex = order.findIndex(function (column) { return column.key === targetKey; });
     if (targetIndex < 0) return;
     if (placeAfter) targetIndex += 1;
-    order.splice(targetIndex, 0, draggedKey);
-    state.settings.columnOrder = order;
+    order.splice(targetIndex, 0, dragged);
+    active.table.columns = order;
     saveState();
     renderStockTable();
   }
 
   function renderColumnsModal() {
-    const visible = new Set(state.settings.visibleColumns);
-    $("columns-list").innerHTML = state.settings.columnOrder.map(function (key) {
-      const column = columnMap.get(key);
-      if (!column) return "";
+    const active = activeTableReference();
+    if (!active) {
+      $("columns-list").innerHTML = '<div class="combo-empty">Önce bir liste açın.</div>';
+      return;
+    }
+    $("columns-list").innerHTML = ensureTableColumns(active.table).map(function (column) {
       return '<label class="column-option"><input type="checkbox" data-column-key="' +
-        escapeHtml(key) + '"' + (visible.has(key) ? " checked" : "") + ">" +
-        escapeHtml(column.label) + "</label>";
+        escapeHtml(column.key) + '"' + (column.visible !== false ? " checked" : "") +
+        "> " + escapeHtml(column.label) + "</label>";
     }).join("");
+  }
+
+  function addCustomColumn(name, targetTable) {
+    const table = targetTable || (activeTableReference() || {}).table;
+    if (!table) return null;
+    const cleanName = String(name || "").trim();
+    if (!cleanName) return null;
+    const columns = ensureTableColumns(table);
+    const key = "custom_" + normalizeText(cleanName) + "_" + Math.random().toString(36).slice(2, 6);
+    const column = {
+      key: key,
+      label: cleanName,
+      visible: true,
+      width: 140,
+      system: false
+    };
+    columns.push(column);
+    table.items.forEach(function (item) {
+      item[key] = "";
+    });
+    return column;
+  }
+
+  function updateColumnVisibility(key, visible) {
+    const active = activeTableReference();
+    if (!active) return;
+    const column = ensureTableColumns(active.table).find(function (entry) { return entry.key === key; });
+    if (!column) return;
+    column.visible = visible;
+    saveState();
+    renderStockTable();
+    syncStockForm(true);
+  }
+
+  function renameColumn(key, label) {
+    const active = activeTableReference();
+    if (!active) return;
+    const column = ensureTableColumns(active.table).find(function (entry) { return entry.key === key; });
+    const cleanLabel = label.trim();
+    if (!column || !cleanLabel) {
+      renderColumnsModal();
+      return;
+    }
+    column.label = cleanLabel;
+    saveState();
+    renderStockTable();
+    syncStockForm(true);
+  }
+
+  function deleteCustomColumn(key, targetTable) {
+    const table = targetTable || (activeTableReference() || {}).table;
+    if (!table) return;
+    const column = ensureTableColumns(table).find(function (entry) { return entry.key === key; });
+    if (!column || column.system) return;
+    table.columns = table.columns.filter(function (entry) {
+      return entry.key !== key;
+    });
+    table.items.forEach(function (item) {
+      delete item[key];
+    });
+    saveState();
+    renderColumnsModal();
+    renderAll(true);
+  }
+
+  function definitionColumns() {
+    const table = definitionTable();
+    return table ? ensureTableColumns(table) : [];
+  }
+
+  function definitionTable() {
+    return tableById(ui.definitionTableId) || (state.tables[0] || null);
+  }
+
+  function syncDefinitionTableSelect() {
+    const select = $("definition-column-table");
+    if (!select) return;
+    const selectedTable = definitionTable();
+    ui.definitionTableId = selectedTable ? selectedTable.id : "";
+    select.innerHTML = state.tables.map(function (table) {
+      return '<option value="' + escapeHtml(table.id) + '"' +
+        (table.id === ui.definitionTableId ? " selected" : "") + ">" +
+        escapeHtml(table.name) + "</option>";
+    }).join("");
+  }
+
+  function selectedDefinitionColumn() {
+    return definitionColumns().find(function (column) {
+      return column.key === ui.definitionColumnKey;
+    }) || null;
+  }
+
+  function showDefinitionColumnError(message) {
+    $("definition-column-error").textContent = message;
+    $("definition-column-error").hidden = !message;
+  }
+
+  function renderDefinitionColumnList() {
+    syncDefinitionTableSelect();
+    const table = definitionTable();
+    if (!table) {
+      $("definition-column-list").innerHTML = '<div class="combo-empty">Önce bir liste oluşturun.</div>';
+      return;
+    }
+    const query = normalizeText($("definition-column-search").value);
+    const columns = definitionColumns().filter(function (column) {
+      return !query || normalizeText(column.label).includes(query);
+    });
+    $("definition-column-list").innerHTML = columns.length
+      ? columns.map(function (column) {
+        const meta = column.system ? "sabit" : "özel";
+        return '<button type="button" class="definition-category-button' +
+          (column.key === ui.definitionColumnKey ? " is-active" : "") +
+          '" data-definition-column="' + escapeHtml(column.key) + '"><span>' +
+          escapeHtml(column.label) + '</span><small>' +
+          (column.visible === false ? "gizli" : meta) + "</small></button>";
+      }).join("")
+      : '<div class="combo-empty">Sütun bulunamadı</div>';
+  }
+
+  function loadDefinitionColumnEditor(key) {
+    syncDefinitionTableSelect();
+    const table = definitionTable();
+    const column = table ? definitionColumns().find(function (entry) {
+      return entry.key === key;
+    }) || null : null;
+    ui.definitionColumnKey = column ? column.key : "";
+    $("definition-column-key").value = column ? column.key : "";
+    $("definition-column-name").value = column ? column.label : "";
+    $("definition-column-visible").checked = column ? column.visible !== false : true;
+    $("definition-column-name").disabled = !table;
+    $("definition-column-visible").disabled = !table;
+    $("delete-definition-column").hidden = !column;
+    $("delete-definition-column").disabled = Boolean(column && column.system);
+    showDefinitionColumnError(table ? "" : "Önce bir liste oluşturun.");
+    renderDefinitionColumnList();
+    if (table) window.setTimeout(function () { $("definition-column-name").focus(); }, 0);
+  }
+
+  function saveDefinitionColumn(event) {
+    event.preventDefault();
+    if (!requireAdministrator()) return;
+    const table = definitionTable();
+    if (!table) {
+      showDefinitionColumnError("Önce bir liste oluşturun.");
+      return;
+    }
+    const key = $("definition-column-key").value;
+    const name = $("definition-column-name").value.trim();
+    const visible = $("definition-column-visible").checked;
+    if (!name) {
+      showDefinitionColumnError("Sütun adı zorunludur.");
+      return;
+    }
+    const columns = definitionColumns();
+    const duplicate = columns.some(function (column) {
+      return column.key !== key && normalizeText(column.label) === normalizeText(name);
+    });
+    if (duplicate) {
+      showDefinitionColumnError("Bu isimde bir sütun zaten var.");
+      return;
+    }
+
+    let column = columns.find(function (entry) { return entry.key === key; });
+    if (column) {
+      column.label = name;
+      column.visible = visible;
+    } else {
+      column = addCustomColumn(name, table);
+      if (column) column.visible = visible;
+    }
+    saveState();
+    renderAll(true);
+    renderDefinitionTabCounts();
+    loadDefinitionColumnEditor(column ? column.key : "");
+    showToast("Sütun tanımı kaydedildi.");
+  }
+
+  function deleteDefinitionColumn() {
+    if (!requireAdministrator()) return;
+    const column = selectedDefinitionColumn();
+    if (!column) return;
+    if (column.system) {
+      showDefinitionColumnError("Sabit sütunlar silinmez. İsterseniz görünürlüğünü kapatabilirsiniz.");
+      return;
+    }
+    const table = definitionTable();
+    deleteCustomColumn(column.key, table);
+    renderDefinitionTabCounts();
+    const first = definitionColumns()[0];
+    loadDefinitionColumnEditor(first ? first.key : "");
+    showToast("Sütun tanımı silindi.");
   }
 
   // ---------------------------------------------------------------------------
   // Stok kartı ve giriş/çıkış
   // ---------------------------------------------------------------------------
 
-  function generatedItemId() {
+  function itemDisplayName(item) {
+    if (!item) return "";
+    return item.name || item.materialName || item.id || "";
+  }
+
+  function generatedRecordId() {
     const active = activeTableReference();
-    if (!active) return "NUM0001";
+    const prefix = activeTableKind() === "quality" ? "KK" : "NUM";
+    if (!active) return prefix + "0001";
     let number = active.table.items.length + 1;
-    let candidate = "NUM" + String(number).padStart(4, "0");
+    let candidate = prefix + String(number).padStart(4, "0");
     while (active.table.items.some(function (item) { return item.id === candidate; })) {
       number += 1;
-      candidate = "NUM" + String(number).padStart(4, "0");
+      candidate = prefix + String(number).padStart(4, "0");
     }
     return candidate;
+  }
+
+  function generatedItemId() {
+    return generatedRecordId();
   }
 
   function categoryComboOptions() {
@@ -841,6 +1158,19 @@
   }
 
   function setStockForm(item) {
+    const isStock = stockLikeActiveTable();
+    $("stock-form-grid").hidden = !isStock;
+    $("custom-card-fields").hidden = isStock;
+    $("stock-card-panel").querySelector(".section-heading h2").textContent = isStock ? "Stok Kartı" : "Kayıt Kartı";
+    const stockCardTab = document.querySelector('[data-right-tab="stock-card"]');
+    if (stockCardTab) stockCardTab.textContent = isStock ? "Stok Kartı" : "Kayıt Kartı";
+    document.querySelectorAll('[data-action="new-card"]').forEach(function (button) {
+      button.textContent = isStock ? "Yeni Kart" : "Yeni Kayıt";
+    });
+    if (!isStock) {
+      setCustomForm(item);
+      return;
+    }
     $("item-id").value = item ? item.id : generatedItemId();
     $("item-name").value = item ? item.name : "";
     $("item-category").value = item ? item.category : "";
@@ -853,6 +1183,51 @@
     syncFootprintField();
     if (categoryCombo) categoryCombo.refresh();
     if (footprintCombo) footprintCombo.refresh();
+  }
+
+  function customFieldInput(column, value) {
+    const key = escapeHtml(column.key);
+    const label = escapeHtml(column.label);
+    const safeValue = escapeHtml(value == null ? "" : value);
+    if (column.key === "approvalStatus") {
+      const options = ["Beklemede", "Onaylandı", "Şartlı Onay", "Red"];
+      return '<label>' + label + '<select class="control" data-custom-field="' + key + '">' +
+        options.map(function (option) {
+          return '<option' + (option === value ? " selected" : "") + '>' + escapeHtml(option) + '</option>';
+        }).join("") + '</select></label>';
+    }
+    if (column.key === "description" || column.key === "controlMethod") {
+      return '<label class="form-span">' + label + '<textarea class="control" data-custom-field="' +
+        key + '" rows="2">' + safeValue + '</textarea></label>';
+    }
+    if (column.numeric) {
+      return '<label>' + label + '<input class="control" data-custom-field="' + key +
+        '" type="number" min="0" step="1" inputmode="numeric" value="' + safeValue + '"></label>';
+    }
+    const type = column.key === "checkedAt" ? "date" : "text";
+    return '<label>' + label + '<input class="control" data-custom-field="' + key +
+      '" type="' + type + '" autocomplete="off" value="' + safeValue + '"></label>';
+  }
+
+  function setCustomForm(item) {
+    const active = activeTableReference();
+    if (!active) return;
+    const columns = ensureTableColumns(active.table).filter(function (column) {
+      return column.visible !== false && column.key !== "id" && column.key !== "updatedAt";
+    });
+    $("custom-card-fields").innerHTML = columns.map(function (column) {
+      return customFieldInput(column, item ? item[column.key] : defaultValueForColumn(column));
+    }).join("");
+  }
+
+  function defaultValueForColumn(column) {
+    if (column.key === "approvalStatus") return "Beklemede";
+    if (column.key === "checkedBy") {
+      const user = currentUser();
+      return user ? user.name : "";
+    }
+    if (column.key === "checkedAt") return new Date().toISOString().slice(0, 10);
+    return column.numeric ? 0 : "";
   }
 
   function syncStockForm(force) {
@@ -876,13 +1251,18 @@
     ui.formItemId = "";
     ui.activeItemId = null;
     // Seri kart girişinde mevcut bilgiler korunur; yalnızca yeni ve benzersiz ID hazırlanır.
-    $("item-id").value = generatedItemId();
+    if (stockLikeActiveTable()) $("item-id").value = generatedItemId();
+    else setCustomForm(null);
     setRightTab("stock-card");
     renderStockTable();
-    $("item-name").focus();
+    const first = stockLikeActiveTable()
+      ? $("item-name")
+      : $("custom-card-fields").querySelector("[data-custom-field]");
+    if (first) first.focus();
   }
 
   function readStockForm() {
+    if (!stockLikeActiveTable()) return readCustomForm();
     return {
       id: $("item-id").value.trim(),
       name: $("item-name").value.trim(),
@@ -897,6 +1277,22 @@
     };
   }
 
+  function readCustomForm() {
+    const active = activeTableReference();
+    const item = activeItem();
+    const values = {
+      id: item && ui.formMode !== "new" ? item.id : generatedRecordId(),
+      updatedAt: nowText()
+    };
+    ensureTableColumns(active.table).forEach(function (column) {
+      if (column.key === "id" || column.key === "updatedAt") return;
+      const input = $("custom-card-fields").querySelector('[data-custom-field="' + column.key + '"]');
+      if (!input) return;
+      values[column.key] = column.numeric ? integerValue(input, NaN) : input.value.trim();
+    });
+    return values;
+  }
+
   function saveStockCard(event) {
     event.preventDefault();
     if (!requireAdministrator()) return;
@@ -906,30 +1302,45 @@
       return;
     }
     const values = readStockForm();
-    if (!values.name) {
+    if (stockLikeActiveTable() && !values.name) {
       showToast("Malzeme adı boş bırakılamaz.", true);
       $("item-name").focus();
       return;
     }
-    const category = categoryDefinition(values.category);
-    if (!category) {
+    if (!stockLikeActiveTable() && !values.materialName) {
+      showToast("Malzeme adı boş bırakılamaz.", true);
+      const input = $("custom-card-fields").querySelector('[data-custom-field="materialName"]');
+      if (input) input.focus();
+      return;
+    }
+    if (stockLikeActiveTable()) {
+      const category = categoryDefinition(values.category);
+      if (!category) {
       showToast("Geçerli bir kategori seçin.", true);
       $("item-category").focus();
       return;
+      }
     }
-    if (!Number.isInteger(values.quantity) || values.quantity < 0) {
+    if (stockLikeActiveTable() && (!Number.isInteger(values.quantity) || values.quantity < 0)) {
       showToast("Miktar sıfır veya daha büyük bir tam sayı olmalıdır.", true);
       $("item-quantity").focus();
       return;
     }
-    if (!Number.isInteger(values.critical) || values.critical < 0) {
+    if (stockLikeActiveTable() && (!Number.isInteger(values.critical) || values.critical < 0)) {
       showToast("Kritik seviye sıfır veya daha büyük bir tam sayı olmalıdır.", true);
       $("item-critical").focus();
       return;
     }
-    if (values.footprint && !allDefinedFootprints().includes(values.footprint)) {
+    if (stockLikeActiveTable() && values.footprint && !allDefinedFootprints().includes(values.footprint)) {
       showToast("Kılıfı tanımlı seçeneklerden seçin.", true);
       $("item-footprint").focus();
+      return;
+    }
+    const numericError = ensureTableColumns(active.table).find(function (column) {
+      return column.numeric && !Number.isInteger(values[column.key]);
+    });
+    if (numericError) {
+      showToast(numericError.label + " sıfır veya daha büyük bir tam sayı olmalıdır.", true);
       return;
     }
 
@@ -1003,6 +1414,7 @@
   function syncMovementForm() {
     const user = currentUser();
     const targets = movementTargetItems();
+    const stockMode = stockLikeActiveTable();
     const entryOption = Array.from($("movement-type").options).find(function (option) {
       return option.value === "Giriş";
     });
@@ -1016,8 +1428,9 @@
     }
     $("movement-user").textContent = user ? user.name : "";
     $("movement-selection").textContent = targets.length
-      ? (targets.length === 1 ? targets[0].name : targets.length + " malzeme seçili")
-      : "Seçim yok";
+      ? (targets.length === 1 ? itemDisplayName(targets[0]) : targets.length + " malzeme seçili")
+      : (stockMode ? "Seçim yok" : "Bu liste stok hareketi kullanmaz");
+    $("movement-panel").querySelector("button[type='submit']").disabled = !stockMode;
     const isExit = $("movement-type").value === "Çıkış";
     $("movement-purpose-label").hidden = !isExit;
     $("movement-purpose").hidden = !isExit;
@@ -1032,6 +1445,11 @@
     const purpose = $("movement-purpose").value.trim();
     const note = $("movement-note").value.trim();
     const user = currentUser();
+
+    if (!stockLikeActiveTable()) {
+      showToast("Bu liste türünde giriş/çıkış işlemi kullanılmaz.", true);
+      return;
+    }
 
     if (type === "Giriş" && !currentUserIsAdmin()) {
       showToast("Üyeler yalnızca stok çıkışı yapabilir.", true);
@@ -1056,7 +1474,7 @@
       return type === "Çıkış" && Number(item.quantity) < quantity;
     });
     if (insufficient.length) {
-      showToast("Yetersiz stok: " + insufficient.map(function (item) { return item.name; }).join(", "), true);
+      showToast("Yetersiz stok: " + insufficient.map(itemDisplayName).join(", "), true);
       return;
     }
 
@@ -1069,7 +1487,7 @@
         id: uid("log"),
         tableId: active.table.id,
         itemId: item.id,
-        itemName: item.name,
+        itemName: itemDisplayName(item),
         date: nowText(),
         type: type,
         quantity: quantity,
@@ -1092,16 +1510,20 @@
     const active = activeTableReference();
     const isAdministrator = currentUserIsAdmin();
     const mayManage = Boolean(active && isAdministrator);
+    const stockMode = stockLikeActiveTable();
     const stockTab = document.querySelector('[data-right-tab="stock-card"]');
+    const movementTab = document.querySelector('[data-right-tab="movement"]');
     const usersTab = document.querySelector('[data-left-tab="users"]');
     const usersMenuItem = document.querySelector('[data-action="show-panel-users"]');
     if (stockTab) stockTab.hidden = !isAdministrator;
+    if (movementTab) movementTab.hidden = !stockMode;
     if (usersTab) usersTab.hidden = !isAdministrator;
     if (usersMenuItem) usersMenuItem.hidden = !isAdministrator;
     if (window.DepoDock) window.DepoDock.setPanelAllowed("stock-card", isAdministrator);
     if (window.DepoDock) window.DepoDock.setPanelAllowed("users", isAdministrator);
     if (!isAdministrator && ui.leftTab === "users") setLeftTab("lists");
-    if (!mayManage && ui.rightTab === "stock-card") setRightTab("movement");
+    if (!mayManage && ui.rightTab === "stock-card" && stockMode) setRightTab("movement");
+    if (!stockMode && ui.rightTab === "movement" && isAdministrator) setRightTab("stock-card");
     document.querySelectorAll('[data-action="new-card"], [data-action="delete-card"]').forEach(function (button) {
       button.disabled = !mayManage;
     });
@@ -1122,7 +1544,7 @@
     const table = tableById(log.tableId);
     if (!table) return "";
     const item = table.items.find(function (entry) { return entry.id === log.itemId; });
-    return item ? item.name : "";
+    return item ? itemDisplayName(item) : "";
   }
 
   function historyTimestamp(dateText) {
@@ -1223,6 +1645,15 @@
     submitButton.classList.toggle("button-danger", options.submitStyle === "danger");
     $("form-modal-error").hidden = true;
     $("form-modal-fields").innerHTML = fields.map(function (field) {
+      if (field.type === "select") {
+        return '<label>' + escapeHtml(field.label) +
+          '<select class="control" name="' + escapeHtml(field.name) + '">' +
+          (field.options || []).map(function (option) {
+            return '<option value="' + escapeHtml(option.value) + '"' +
+              (option.value === field.value ? " selected" : "") + ">" +
+              escapeHtml(option.label) + "</option>";
+          }).join("") + "</select></label>";
+      }
       return '<label>' + escapeHtml(field.label) +
         '<input class="control" type="' + escapeHtml(field.type || "text") +
         '" autocomplete="' + escapeHtml(field.autocomplete || "off") +
@@ -1256,7 +1687,17 @@
     openFormModal({
       title: "Yeni liste",
       fields: [
-        { name: "name", label: "Liste adı", required: true }
+        { name: "name", label: "Liste adı", required: true },
+        {
+          name: "kind",
+          label: "Liste türü",
+          type: "select",
+          value: "stock",
+          options: [
+            { value: "stock", label: "Stok listesi" },
+            { value: "quality", label: "Kalite kontrol listesi" }
+          ]
+        }
       ],
       submitLabel: "Oluştur",
       onSubmit: function (values) {
@@ -1266,7 +1707,14 @@
           return normalizeText(table.name) === normalizeText(name);
         });
         if (duplicate) throw new Error("Bu isimde bir liste zaten var.");
-        const table = { id: uid("table"), name: name, items: [] };
+        const kind = values.kind === "quality" ? "quality" : "stock";
+        const table = {
+          id: uid("table"),
+          name: name,
+          kind: kind,
+          columns: defaultColumnsForKind(kind),
+          items: []
+        };
         state.tables.push(table);
         openTable(table.id);
         showToast("Yeni liste oluşturuldu.");
@@ -1364,18 +1812,28 @@
   }
 
   function setDefinitionView(view) {
-    ui.definitionView = view === "footprints" ? "footprints" : "categories";
+    ui.definitionView = ["categories", "footprints", "columns"].includes(view) ? view : "categories";
     const categoryView = ui.definitionView === "categories";
+    const footprintView = ui.definitionView === "footprints";
+    const columnsView = ui.definitionView === "columns";
     $("definitions-category-pane").hidden = !categoryView;
-    $("definitions-footprint-pane").hidden = categoryView;
+    $("definitions-footprint-pane").hidden = !footprintView;
+    $("definitions-columns-pane").hidden = !columnsView;
     $("definitions-category-tab").classList.toggle("is-active", categoryView);
-    $("definitions-footprint-tab").classList.toggle("is-active", !categoryView);
-    if (!categoryView) renderGlobalFootprintList();
+    $("definitions-footprint-tab").classList.toggle("is-active", footprintView);
+    $("definitions-columns-tab").classList.toggle("is-active", columnsView);
+    if (footprintView) renderGlobalFootprintList();
+    if (columnsView) {
+      const firstColumn = definitionColumns()[0];
+      if (!selectedDefinitionColumn()) loadDefinitionColumnEditor(firstColumn ? firstColumn.key : "");
+      else renderDefinitionColumnList();
+    }
   }
 
   function renderDefinitionTabCounts() {
     $("definitions-category-tab").textContent = "Kategoriler (" + categoryDefinitions().length + ")";
     $("definitions-footprint-tab").textContent = "Kılıflar (" + allDefinedFootprints().length + ")";
+    $("definitions-columns-tab").textContent = "Sütunlar (" + definitionColumns().length + ")";
   }
 
   function renderDefinitionCategoryList() {
@@ -1410,11 +1868,15 @@
     $("definitions-modal").hidden = false;
     $("definition-search").value = "";
     $("global-footprint-search").value = "";
+    $("definition-column-search").value = "";
+    ui.definitionTableId = state.session.activeTableId || (state.tables[0] || {}).id || "";
     const first = categoryDefinitions()[0];
     renderDefinitionTabCounts();
     loadDefinitionEditor(first ? first.id : "");
     const firstFootprint = allDefinedFootprints()[0] || "";
     loadGlobalFootprintEditor(firstFootprint);
+    const firstColumn = definitionColumns()[0];
+    loadDefinitionColumnEditor(firstColumn ? firstColumn.key : "");
     setDefinitionView("categories");
   }
 
@@ -1422,6 +1884,7 @@
     $("definitions-modal").hidden = true;
     ui.definitionCategoryId = "";
     ui.definitionFootprint = "";
+    ui.definitionColumnKey = "";
   }
 
   function saveDefinition(event) {
@@ -1659,7 +2122,9 @@
       showToast("Dışa aktarılacak tabloyu açın.", true);
       return;
     }
-    const columns = window.DepoData.columnDefinitions;
+    const columns = ensureTableColumns(active.table).filter(function (column) {
+      return column.visible !== false;
+    });
     const lines = [
       columns.map(function (column) { return csvCell(column.label); }).join(";")
     ];
@@ -1681,7 +2146,7 @@
   // ---------------------------------------------------------------------------
 
   function openBom() {
-    if (!activeTableReference()) {
+    if (!activeTableReference() || !stockLikeActiveTable()) {
       showToast("BOM için önce bir stok tablosu açın.", true);
       return;
     }
@@ -1725,11 +2190,11 @@
 
   function bomMatchScore(description, item) {
     const descriptionText = normalizeText(description);
-    const nameText = normalizeText(item.name);
+    const nameText = normalizeText(itemDisplayName(item));
     if (!nameText) return 0;
     if (descriptionText === nameText) return 100;
     if (descriptionText.includes(nameText)) return Math.min(99, 72 + Math.round(nameText.length / 4));
-    const code = normalizeText(item.name.split(/\s+/)[0]);
+    const code = normalizeText(itemDisplayName(item).split(/\s+/)[0]);
     if (code.length >= 4 && descriptionText.includes(code)) return 90;
     return Math.round(similarity(descriptionText, nameText) * 100);
   }
@@ -1778,7 +2243,7 @@
     const active = activeTableReference();
     if (!active) return;
     const options = active.table.items.map(function (item) {
-      const details = [item.name, item.footprint, item.box].filter(Boolean).join(" / ");
+      const details = [itemDisplayName(item), item.footprint, item.box].filter(Boolean).join(" / ");
       return '<option value="' + escapeHtml(item.id) + '">' + escapeHtml(details) + "</option>";
     }).join("");
     $("bom-table-body").innerHTML = ui.bomRows.map(function (row, index) {
@@ -1854,7 +2319,7 @@
         id: uid("log"),
         tableId: active.table.id,
         itemId: item.id,
-        itemName: item.name,
+        itemName: itemDisplayName(item),
         date: nowText(),
         type: "Çıkış",
         quantity: row.quantity,
@@ -1896,11 +2361,17 @@
     document.body.classList.add("is-resizing-column");
 
     function applyWidth(width) {
-      widths[key] = Math.max(55, Math.min(600, Math.round(width)));
+      const nextWidth = Math.max(55, Math.min(600, Math.round(width)));
+      widths[key] = nextWidth;
+      const active = activeTableReference();
+      if (active && group !== "history") {
+        const column = ensureTableColumns(active.table).find(function (entry) { return entry.key === key; });
+        if (column) column.width = nextWidth;
+      }
       document.querySelectorAll("[" + attribute + '="' + key + '"]').forEach(function (cell) {
-        cell.style.width = widths[key] + "px";
-        cell.style.minWidth = widths[key] + "px";
-        cell.style.maxWidth = widths[key] + "px";
+        cell.style.width = nextWidth + "px";
+        cell.style.minWidth = nextWidth + "px";
+        cell.style.maxWidth = nextWidth + "px";
       });
     }
 
@@ -1999,6 +2470,8 @@
       "delete-definition": deleteDefinition,
       "new-global-footprint": function () { loadGlobalFootprintEditor(""); },
       "delete-global-footprint": deleteGlobalFootprint,
+      "new-definition-column": function () { loadDefinitionColumnEditor(""); },
+      "delete-definition-column": deleteDefinitionColumn,
       "refresh": function () {
         ui.activeItemId = null;
         ui.formItemId = null;
@@ -2056,14 +2529,15 @@
       "close-form-modal": closeFormModal,
       "close-columns": function () { $("columns-modal").hidden = true; },
       "reset-columns": function () {
-        state.settings.visibleColumns = window.DepoData.columnDefinitions.map(function (column) { return column.key; });
+        const active = activeTableReference();
+        if (active) active.table.columns = defaultColumnsForKind(tableKind(active.table));
+        state.settings.visibleColumns = window.DepoData.stockColumnDefinitions.map(function (column) { return column.key; });
         state.settings.columnOrder = state.settings.visibleColumns.slice();
         state.settings.columnWidths = Object.assign({}, defaultColumnWidths);
         state.settings.historyColumnWidths = Object.assign({}, defaultHistoryColumnWidths);
         saveState();
         renderColumnsModal();
-        renderStockTable();
-        renderHistory();
+        renderAll(true);
       },
       "close-bom": function () { $("bom-modal").hidden = true; },
       "load-bom": function () { $("bom-file-input").click(); },
@@ -2279,15 +2753,7 @@
   $("columns-list").addEventListener("change", function (event) {
     const checkbox = event.target.closest("[data-column-key]");
     if (!checkbox) return;
-    const key = checkbox.dataset.columnKey;
-    const visible = new Set(state.settings.visibleColumns);
-    if (checkbox.checked) visible.add(key);
-    else visible.delete(key);
-    state.settings.visibleColumns = state.settings.columnOrder.filter(function (columnKey) {
-      return visible.has(columnKey);
-    });
-    saveState();
-    renderStockTable();
+    updateColumnVisibility(checkbox.dataset.columnKey, checkbox.checked);
   });
 
   $("definition-form").addEventListener("submit", saveDefinition);
@@ -2305,6 +2771,19 @@
   $("global-footprint-list").addEventListener("click", function (event) {
     const button = event.target.closest("[data-global-footprint]");
     if (button) loadGlobalFootprintEditor(button.dataset.globalFootprint);
+  });
+  $("definition-column-form").addEventListener("submit", saveDefinitionColumn);
+  $("definition-column-search").addEventListener("input", renderDefinitionColumnList);
+  $("definition-column-table").addEventListener("change", function () {
+    ui.definitionTableId = $("definition-column-table").value;
+    ui.definitionColumnKey = "";
+    const firstColumn = definitionColumns()[0];
+    renderDefinitionTabCounts();
+    loadDefinitionColumnEditor(firstColumn ? firstColumn.key : "");
+  });
+  $("definition-column-list").addEventListener("click", function (event) {
+    const button = event.target.closest("[data-definition-column]");
+    if (button) loadDefinitionColumnEditor(button.dataset.definitionColumn);
   });
 
   $("json-file-input").addEventListener("change", function () {

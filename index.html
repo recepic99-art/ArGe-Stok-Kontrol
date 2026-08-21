@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title>Ar-Ge Numune Depo - Web Demo</title>
   <link rel="stylesheet" href="assets/vendor/dockview/dockview.css?v=7.0.3">
-  <link rel="stylesheet" href="assets/css/app.css?v=catalog-2">
+  <link rel="stylesheet" href="assets/css/app.css?v=definitions-2">
 </head>
 <body>
   <div id="app" class="app-shell" aria-hidden="true">
@@ -27,7 +27,7 @@
           <button data-action="new-card">Yeni stok kartı</button>
           <button data-action="clear-selection">Seçimleri temizle</button>
           <div class="menu-separator"></div>
-          <button data-action="open-definitions">Kategori ve kılıf tanımları</button>
+          <button data-action="open-definitions">Tanımlamalar</button>
         </div>
       </div>
       <div class="menu-group">
@@ -154,7 +154,7 @@
 
           <form id="stock-card-panel" class="dock-content form-panel" autocomplete="off">
             <div class="section-heading"><h2>Stok Kartı</h2></div>
-            <div class="form-grid">
+            <div id="stock-form-grid" class="form-grid">
               <label>ID<input id="item-id" class="control" readonly></label>
               <label>Malzeme Adı<input id="item-name" class="control" autocomplete="off" required></label>
               <label>Cins/Kategori
@@ -182,6 +182,7 @@
               <label>Kritik Seviye<input id="item-critical" class="control" type="number" min="0" step="1" inputmode="numeric"></label>
               <label class="form-span">Açıklama<textarea id="item-description" class="control" autocomplete="off" rows="2"></textarea></label>
             </div>
+            <div id="custom-card-fields" class="form-grid" hidden></div>
             <div class="form-actions">
               <button type="button" class="button button-muted" data-action="new-card">Yeni Kart</button>
               <button type="submit" class="button button-primary">Kaydet</button>
@@ -366,14 +367,15 @@
     <section class="modal-dialog definitions-modal" role="dialog" aria-modal="true" aria-labelledby="definitions-title">
       <div class="modal-header">
         <div>
-          <h2 id="definitions-title">Kategori ve Kılıf Kataloğu</h2>
-          <p class="muted">Kategori ve kılıf seçenekleri birbirinden bağımsızdır</p>
+          <h2 id="definitions-title">Tanımlamalar</h2>
+          <p class="muted">Kategori, kılıf ve aktif liste sütunlarını yönetin.</p>
         </div>
         <button class="icon-button" data-action="close-definitions" aria-label="Kapat">×</button>
       </div>
       <div class="definitions-tabs" role="tablist" aria-label="Tanım türü">
         <button id="definitions-category-tab" class="definitions-tab is-active" type="button" data-definition-view="categories">Kategoriler</button>
         <button id="definitions-footprint-tab" class="definitions-tab" type="button" data-definition-view="footprints">Kılıflar</button>
+        <button id="definitions-columns-tab" class="definitions-tab" type="button" data-definition-view="columns">Sütunlar</button>
       </div>
       <div id="definitions-category-pane" class="definitions-layout">
         <aside class="definitions-sidebar">
@@ -427,6 +429,32 @@
           </div>
         </form>
       </div>
+      <div id="definitions-columns-pane" class="definitions-layout" hidden>
+        <aside class="definitions-sidebar">
+          <div class="definitions-sidebar-toolbar">
+            <select id="definition-column-table" class="control" title="Sütunları düzenlenecek liste"></select>
+            <input id="definition-column-search" class="control" type="search" placeholder="Sütun ara">
+            <button class="icon-button" data-action="new-definition-column" title="Yeni sütun" aria-label="Yeni sütun">+</button>
+          </div>
+          <div id="definition-column-list" class="definition-category-list"></div>
+        </aside>
+        <form id="definition-column-form" class="definition-editor definition-simple-editor" autocomplete="off">
+          <input id="definition-column-key" type="hidden">
+          <div class="definition-editor-intro">
+            <strong>Liste sütunu</strong>
+            <span>Üstte seçili listenin sütunlarını düzenler. Görünürlük hızlı Sütunlar penceresinden de açılıp kapatılabilir.</span>
+          </div>
+          <label>Sütun adı<input id="definition-column-name" class="control" required placeholder="Örn. Tedarikçi"></label>
+          <label class="check-label"><input id="definition-column-visible" type="checkbox"> Tablo ve formda göster</label>
+          <div id="definition-column-error" class="inline-error" hidden></div>
+          <div class="definitions-actions">
+            <button id="delete-definition-column" class="button button-danger" type="button" data-action="delete-definition-column">Sütunu Sil</button>
+            <span></span>
+            <button class="button button-muted" type="button" data-action="close-definitions">Kapat</button>
+            <button class="button button-primary" type="submit">Kaydet</button>
+          </div>
+        </form>
+      </div>
     </section>
   </div>
 
@@ -436,7 +464,7 @@
 
   <script src="assets/js/seed.js?v=catalog-3"></script>
   <script src="assets/js/catalog.js?v=3"></script>
-  <script src="assets/js/data.js?v=catalog-3"></script>
+  <script src="assets/js/data.js?v=quality-columns-1"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
@@ -445,6 +473,6 @@
   <script src="assets/vendor/dockview/dockview.min.js?v=7.0.3"></script>
   <script src="assets/js/dock-layout.js?v=6"></script>
   <script src="assets/js/combobox.js?v=2"></script>
-  <script src="assets/js/app.js?v=catalog-3"></script>
+  <script src="assets/js/app.js?v=definitions-2"></script>
 </body>
 </html>

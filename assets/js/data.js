@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const columnDefinitions = [
+  const stockColumnDefinitions = [
     { key: "id", label: "ID" },
     { key: "name", label: "Malzeme Adı" },
     { key: "category", label: "Cins/Kategori" },
@@ -13,6 +13,27 @@
     { key: "description", label: "Açıklama" },
     { key: "updatedAt", label: "Son Güncelleme" }
   ];
+
+  const qualityColumnDefinitions = [
+    { key: "materialName", label: "Malzeme Adı" },
+    { key: "supplier", label: "Geldiği Yer" },
+    { key: "incomingQuantity", label: "Gelen Adet", numeric: true },
+    { key: "sampleQuantity", label: "Numune Adedi", numeric: true },
+    { key: "controlMethod", label: "Kontrol Yöntemi" },
+    { key: "approvalStatus", label: "Onay Durumu" },
+    { key: "checkedBy", label: "Kontrol Eden" },
+    { key: "checkedAt", label: "Kontrol Tarihi" },
+    { key: "description", label: "Açıklama" },
+    { key: "updatedAt", label: "Son Güncelleme" }
+  ];
+
+  const columnDefinitions = stockColumnDefinitions.concat(
+    qualityColumnDefinitions.filter(function (column) {
+      return !stockColumnDefinitions.some(function (stockColumn) {
+        return stockColumn.key === column.key;
+      });
+    })
+  );
 
   // Yeni bir JSON dosyası oluşturulduğunda yalnızca gerçek kullanıcı ve boş ana liste gelir.
   function createInitialState() {
@@ -80,6 +101,8 @@
 
   window.DepoData = {
     columnDefinitions: columnDefinitions,
+    stockColumnDefinitions: stockColumnDefinitions,
+    qualityColumnDefinitions: qualityColumnDefinitions,
     createInitialState: createInitialState
   };
 }());
