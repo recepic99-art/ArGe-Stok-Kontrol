@@ -97,24 +97,80 @@
     };
   }
 
-  function categoryByName(definitions, name) {
-    const key = normalizeText(name);
-    return ((definitions && definitions.categories) || []).find(function (category) {
-      return normalizeText(category.name) === key;
-    }) || null;
+  function tableKind(table) {
+    if (table && table.kind) return table.kind;
+    return normalizeText(table && table.name).includes("kalite-kontrol") ? "quality" : "stock";
   }
 
-  function allFootprints(definitions) {
-    return uniqueSorted((definitions && definitions.footprints) || []);
+  function columnRecord(definition, legacy, visibleColumns, kind) {
+    let options = uniqueSorted(definition.options || []);
+    if (kind === "stock" && definition.key === "category") {
+      options = legacy.categories.map(function (category) { return category.name; });
+    }
+    if (kind === "stock" && definition.key === "footprint") {
+      options = legacy.footprints.slice();
+    }
+    return {
+      key: definition.key,
+      label: definition.label,
+      visible: kind !== "stock" || !visibleColumns.length || visibleColumns.includes(definition.key),
+      system: true,
+      fieldType: definition.fieldType || (definition.numeric ? "number" : "text"),
+      options: options,
+      editable: definition.editable !== false,
+      integer: Boolean(definition.integer),
+      numeric: definition.fieldType === "number" || Boolean(definition.numeric)
+    };
+  }
+
+  // Eski JSON/Firebase yapısındaki ayrı kategori ve kılıf kataloglarını bir kez
+  // gerçek combobox sütunlarına taşır. Dönüşten sonra `definitions` alanı artık
+  // tutulmaz; bütün seçeneklerin tek sahibi ilgili listenin sütun şemasıdır.
+  function migrateLegacyState(state, definitionsByKind) {
+    if (!state || !Array.isArray(state.tables)) return state;
+    const legacy = normalizeDefinitions(state.definitions, state.tables);
+    const visibleColumns = state.settings && Array.isArray(state.settings.visibleColumns)
+      ? state.settings.visibleColumns
+      : [];
+
+    state.tables.forEach(function (table) {
+      const kind = tableKind(table);
+      table.kind = kind;
+      const defaults = definitionsByKind && definitionsByKind[kind] || [];
+      if (!Array.isArray(table.columns)) {
+        const deletedKeys = new Set(Array.isArray(table.deletedColumnKeys)
+          ? table.deletedColumnKeys.map(String)
+          : []);
+        table.columns = defaults.filter(function (definition) {
+          return !deletedKeys.has(definition.key);
+        }).map(function (definition) {
+          return columnRecord(definition, legacy, visibleColumns, kind);
+        });
+        return;
+      }
+
+      table.columns = table.columns.map(function (source) {
+        const column = clone(source);
+        const oldSource = column.optionSource;
+        const shouldMigrateCategory = kind === "stock" && column.key === "category" &&
+          (oldSource === "categories" || !Array.isArray(column.options) || !column.options.length);
+        const shouldMigrateFootprint = kind === "stock" && column.key === "footprint" &&
+          (oldSource === "footprints" || !Array.isArray(column.options) || !column.options.length);
+        if (shouldMigrateCategory) {
+          column.options = legacy.categories.map(function (category) { return category.name; });
+        } else if (shouldMigrateFootprint) {
+          column.options = legacy.footprints.slice();
+        }
+        delete column.optionSource;
+        return column;
+      });
+    });
+
+    delete state.definitions;
+    return state;
   }
 
   window.DepoCatalog = {
-    allFootprints: allFootprints,
-    categoryByName: categoryByName,
-    categoryId: categoryId,
-    clone: clone,
-    normalizeDefinitions: normalizeDefinitions,
-    normalizeText: normalizeText,
-    uniqueSorted: uniqueSorted
+    migrateLegacyState: migrateLegacyState
   };
 }());

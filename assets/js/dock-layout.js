@@ -1,10 +1,9 @@
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "arge-depo-dock-layout-v4";
+  const STORAGE_KEY = "arge-depo-dock-layout-v5";
   const panelTitles = {
     lists: "Listeler",
-    users: "Kullanıcılar",
     stock: "Stok Listesi",
     "stock-card": "Stok Kartı",
     movement: "Giriş / Çıkış",
@@ -25,7 +24,6 @@
 
   function collectExistingPanels(workspace) {
     rememberPanel("lists", document.getElementById("lists-panel"));
-    rememberPanel("users", document.getElementById("users-panel"));
     rememberPanel("stock", document.getElementById("stock-dock"));
     rememberPanel("stock-card", document.getElementById("stock-card-panel"));
     rememberPanel("movement", document.getElementById("movement-panel"));
@@ -61,9 +59,6 @@
     if (id === "lists") {
       options.position = { direction: "left" };
       options.initialWidth = 250;
-    } else if (id === "users" && api.getPanel("lists")) {
-      options.position = { referencePanel: "lists" };
-      options.inactive = true;
     } else if (id === "stock") {
       options.position = { direction: "right" };
     } else if (id === "stock-card" && api.getPanel("stock")) {
@@ -83,7 +78,6 @@
   function addDefaultPanels() {
     api.addPanel(panelOptions("stock"));
     api.addPanel(panelOptions("lists"));
-    api.addPanel(panelOptions("users"));
     api.addPanel(panelOptions("stock-card"));
     api.addPanel(panelOptions("movement"));
     api.addPanel(panelOptions("history"));

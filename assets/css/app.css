@@ -472,8 +472,7 @@ button {
   border: 0;
 }
 
-#lists-panel.dock-panel-body,
-#users-panel.dock-panel-body {
+#lists-panel.dock-panel-body {
   display: flex;
   flex-direction: column;
 }
@@ -785,75 +784,6 @@ textarea.control {
   flex: 0 0 auto;
   color: var(--muted);
   font-size: 11px;
-}
-
-.users-panel {
-  display: flex;
-  flex-direction: column;
-}
-
-.users-panel[hidden] {
-  display: none;
-}
-
-.user-list {
-  display: grid;
-  gap: 7px;
-}
-
-.user-list-item {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 92px;
-  align-items: center;
-  gap: 9px;
-  padding: 9px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface-soft);
-}
-
-.user-avatar {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--primary);
-  color: #ffffff;
-  font-weight: 700;
-}
-
-.user-identity {
-  display: grid;
-  min-width: 0;
-}
-
-.user-identity strong,
-.user-identity small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.user-identity small {
-  margin-top: 2px;
-  color: var(--muted);
-}
-
-.user-role-select {
-  width: 92px;
-  min-width: 0;
-  min-height: 32px;
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--input);
-  color: var(--text);
-}
-
-.permission-note {
-  margin-top: auto;
-  padding-top: 14px;
 }
 
 .splitter {
@@ -1176,8 +1106,7 @@ body.is-resizing-column * {
   gap: 10px 12px;
 }
 
-.form-grid label,
-.auth-form-area form > label {
+.form-grid label {
   display: grid;
   min-width: 0;
   gap: 5px;
@@ -1187,6 +1116,26 @@ body.is-resizing-column * {
 
 .form-span {
   grid-column: 1 / -1;
+}
+
+.checkbox-form-field .checkbox-value {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.checkbox-cell {
+  text-align: center;
+}
+
+.checkbox-cell input {
+  pointer-events: none;
 }
 
 .form-actions {
@@ -1262,10 +1211,16 @@ body.is-resizing-column * {
   backdrop-filter: blur(2px);
 }
 
+/* Tanımlamalar gibi başka bir pencerenin içinden yönetici parolası istendiğinde
+   ortak form penceresi her zaman en üstte kalır. */
+#form-modal {
+  z-index: 2400;
+}
+
 .auth-dialog {
   display: grid;
   width: min(850px, 96vw);
-  min-height: 560px;
+  min-height: 380px;
   grid-template-columns: 280px minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
@@ -1352,13 +1307,6 @@ body.is-resizing-column * {
   }
 }
 
-.auth-tabs {
-  display: flex;
-  gap: 8px;
-  margin: 18px 0 22px;
-  border-bottom: 1px solid var(--border);
-}
-
 .json-file-setup {
   display: grid;
   gap: 10px;
@@ -1392,44 +1340,8 @@ body.is-resizing-column * {
   flex: 1;
 }
 
-.auth-tab {
-  position: relative;
-  padding: 9px 13px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.auth-tab.is-active {
-  color: var(--primary);
-}
-
-.auth-tab.is-active::after {
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 2px;
-  content: "";
-  background: var(--primary);
-}
-
-.auth-form-area form {
-  display: grid;
-  gap: 14px;
-}
-
-.auth-submit {
-  justify-self: end;
-  min-width: 120px;
-  margin-top: 8px;
-}
-
-.demo-credentials {
-  margin-top: 18px;
-  color: var(--muted);
-  font-size: 12px;
+.connection-retry {
+  margin-top: 14px;
 }
 
 .inline-error {
@@ -1472,53 +1384,8 @@ body.is-resizing-column * {
   display: grid;
   width: min(780px, 96vw);
   height: min(560px, 88vh);
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
-}
-
-.definitions-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 0 18px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.definitions-tab {
-  position: relative;
-  padding: 9px 13px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.definitions-tab::after {
-  position: absolute;
-  right: 8px;
-  bottom: -1px;
-  left: 8px;
-  height: 2px;
-  background: transparent;
-  content: "";
-}
-
-.definitions-tab:hover,
-.definitions-tab.is-active {
-  color: var(--primary);
-}
-
-.definitions-tab:focus {
-  outline: 0;
-}
-
-.definitions-tab:focus-visible {
-  border-radius: 5px 5px 0 0;
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 28%, transparent);
-}
-
-.definitions-tab.is-active::after {
-  background: var(--primary);
 }
 
 .definitions-layout {
@@ -1558,25 +1425,6 @@ body.is-resizing-column * {
   line-height: 1.45;
 }
 
-.definition-usage-card {
-  display: grid;
-  align-content: center;
-  justify-items: end;
-  gap: 4px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface-soft);
-}
-
-.definition-usage-card span {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.definition-usage-card strong {
-  font-size: 18px;
-}
 
 .definitions-sidebar {
   display: grid;
@@ -1600,12 +1448,17 @@ body.is-resizing-column * {
   grid-column: 1 / -1;
 }
 
-.definition-category-list {
+#definition-column-options-field small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.definition-item-list {
   overflow: auto;
   padding: 5px;
 }
 
-.definition-category-button {
+.definition-list-button {
   display: flex;
   width: 100%;
   align-items: center;
@@ -1621,19 +1474,19 @@ body.is-resizing-column * {
   cursor: pointer;
 }
 
-.definition-category-button:hover,
-.definition-category-button.is-active {
+.definition-list-button:hover,
+.definition-list-button.is-active {
   background: var(--selected);
   color: var(--selected-text);
 }
 
-.definition-category-button span {
+.definition-list-button span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.definition-category-button small {
+.definition-list-button small {
   color: var(--muted);
 }
 
@@ -1647,10 +1500,6 @@ body.is-resizing-column * {
   background: var(--surface);
 }
 
-#definition-form {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .definition-editor > label {
   display: grid;
   gap: 5px;
@@ -1659,8 +1508,7 @@ body.is-resizing-column * {
 }
 
 .definitions-actions,
-#definition-error,
-#global-footprint-error {
+#definition-column-error {
   grid-column: 1 / -1;
 }
 

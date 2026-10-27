@@ -12,38 +12,24 @@ const catalogSource = fs.readFileSync(
   "utf8"
 );
 
-const legacyUsers = [
-  {
-    id: "u-recep",
-    username: "recep",
-    name: "Recep İç",
-    authUid: "",
-    role: "admin"
-  }
-];
-
 const sharedDatabase = {
   appState: {
-    schemaVersion: 4,
-    users: clone(legacyUsers),
+    schemaVersion: 11,
     tables: [],
-    logs: [],
-    rolesByUid: {}
+    logs: []
   }
 };
 
 const accounts = {
   "recepic@argestokkontrol.app": {
     uid: "uid-recepic",
-    displayName: "Recep İç"
-  },
-  "ali@argestokkontrol.app": {
-    uid: "uid-ali",
-    displayName: "Ali"
+    displayName: "Recep İç",
+    password: "demo123"
   }
 };
 
 const cloudListeners = [];
+let anonymousSequence = 0;
 
 function clone(value) {
   if (value === undefined) return undefined;
@@ -121,6 +107,7 @@ function createReference(referencePath) {
 
 function createClient(navigationType) {
   const localValues = new Map();
+  const sessionValues = new Map();
   const document = {};
   let persistence = "";
   const auth = {
@@ -134,22 +121,32 @@ function createClient(navigationType) {
       });
       return function () {};
     },
-    async signInWithEmailAndPassword(email) {
-      const account = accounts[email];
-      if (!account) throw new Error("Kullanıcı bulunamadı.");
+    async signInAnonymously() {
+      anonymousSequence += 1;
       const user = {
-        uid: account.uid,
-        displayName: account.displayName,
-        async updateProfile(profile) {
-          this.displayName = profile.displayName;
-        },
-        async delete() {}
+        uid: "anonymous-" + anonymousSequence,
+        email: null,
+        displayName: "",
+        isAnonymous: true
       };
       auth.currentUser = user;
       return { user: user };
     },
-    async createUserWithEmailAndPassword(email) {
-      return auth.signInWithEmailAndPassword(email);
+    async signInWithEmailAndPassword(email, password) {
+      const account = accounts[email];
+      if (!account || account.password !== password) {
+        const error = new Error("Parola hatalı.");
+        error.code = "auth/wrong-password";
+        throw error;
+      }
+      const user = {
+        uid: account.uid,
+        email: email,
+        displayName: account.displayName,
+        isAnonymous: false
+      };
+      auth.currentUser = user;
+      return { user: user };
     },
     async signOut() {
       auth.currentUser = null;
@@ -181,15 +178,31 @@ function createClient(navigationType) {
       }
     },
     DepoFirebaseConfig: {},
+    DepoAccessConfig: {
+      administratorEmail: "recepic@argestokkontrol.app",
+      administratorMinutes: 15
+    },
     DepoData: {
+      stockColumnDefinitions: [
+        { key: "id", label: "ID", fieldType: "text", editable: false },
+        { key: "name", label: "Malzeme Adı", fieldType: "text" },
+        { key: "category", label: "Cins/Kategori", fieldType: "select" },
+        { key: "footprint", label: "Kılıf", fieldType: "select" }
+      ],
+      qualityColumnDefinitions: [],
+      migrateLegacyState: function (state) {
+        return window.DepoCatalog.migrateLegacyState(state, {
+          stock: this.stockColumnDefinitions,
+          quality: this.qualityColumnDefinitions
+        });
+      },
       createInitialState: function () {
         return {
-          schemaVersion: 4,
-          users: clone(legacyUsers),
+          schemaVersion: 11,
           tables: [],
           logs: [],
           session: {
-            currentUserId: null,
+            operatorName: "",
             activeTableId: "",
             openTableIds: []
           },
@@ -207,6 +220,17 @@ function createClient(navigationType) {
       },
       setItem(key, value) {
         localValues.set(key, value);
+      }
+    },
+    sessionStorage: {
+      getItem(key) {
+        return sessionValues.get(key) || null;
+      },
+      setItem(key, value) {
+        sessionValues.set(key, value);
+      },
+      removeItem(key) {
+        sessionValues.delete(key);
       }
     },
     performance: {
@@ -228,94 +252,54 @@ function createClient(navigationType) {
   window.DepoStore.testPersistence = function () {
     return persistence;
   };
+  window.DepoStore.testAuthUser = function () {
+    return clone(auth.currentUser);
+  };
   return window.DepoStore;
 }
 
-function authenticatedUsers(state) {
-  return state.users.filter(function (user) {
-    return Boolean(user.authUid);
-  });
-}
-
 (async function () {
-  const refreshedSessionClient = createClient("reload");
-  await refreshedSessionClient.initialize();
-  await refreshedSessionClient.signIn("recepic", "demo123");
-  const refreshedSessionState = await refreshedSessionClient.initialize();
-  assert.equal(refreshedSessionClient.testPersistence(), "SESSION");
-  assert.equal(refreshedSessionState.session.currentUserId, "user-uid-recepic");
-
-  const reopenedBrowserClient = createClient("navigate");
-  await reopenedBrowserClient.initialize();
-  await reopenedBrowserClient.signIn("recepic", "demo123");
-  const reopenedBrowserState = await reopenedBrowserClient.initialize();
-  assert.equal(reopenedBrowserState.session.currentUserId, null);
-
-  const administratorClient = createClient();
-  await administratorClient.initialize();
-  const administratorState = await administratorClient.register(
-    "recepic",
-    "demo123",
-    "Recep İç"
-  );
-
-  assert.equal(authenticatedUsers(administratorState).length, 1);
-  assert.equal(authenticatedUsers(administratorState)[0].role, "admin");
-  assert.equal(valueAtPath("appState/rolesByUid/uid-recepic"), "admin");
-
-  const memberClient = createClient();
-  await memberClient.initialize();
-  const memberState = await memberClient.register("ali", "demo123", "Ali");
-  assert.equal(
-    authenticatedUsers(memberState).find(function (user) {
-      return user.username === "ali";
-    }).role,
-    "member"
-  );
-
-  // Eski veya eksik bir tarayıcı yalnız stok kaydederken kullanıcı dizinine
-  // dokunamamalıdır.
-  memberClient.save({
-    users: [authenticatedUsers(memberState)[1]],
-    tables: [{ id: "table-test", name: "Test", items: [] }],
-    logs: [],
-    session: memberState.session,
-    settings: memberState.settings
-  });
-  await memberClient.flush();
-  assert.equal(Object.keys(valueAtPath("appState/userDirectory")).length, 2);
+  const accessClient = createClient("reload");
+  const anonymousState = await accessClient.initialize();
+  assert.equal(accessClient.testPersistence(), "SESSION");
+  assert.equal(accessClient.testAuthUser().isAnonymous, true);
+  assert.equal(accessClient.isAdministrator(), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(anonymousState, "users"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(anonymousState.session, "currentUserId"), false);
 
   await assert.rejects(
-    memberClient.setUserRole("user-uid-ali", "admin"),
-    /yalnızca yöneticiler/
+    accessClient.enterAdministrator("yanlis-parola"),
+    /Yönetici parolası hatalı/
   );
+  assert.equal(accessClient.testAuthUser().isAnonymous, true);
 
-  await administratorClient.setUserRole("user-uid-ali", "admin");
-  assert.equal(valueAtPath("appState/rolesByUid/uid-ali"), "admin");
+  const administratorState = await accessClient.enterAdministrator("demo123");
+  assert.equal(accessClient.testAuthUser().email, "recepic@argestokkontrol.app");
+  assert.equal(accessClient.isAdministrator(), true);
+  assert.equal(Object.prototype.hasOwnProperty.call(administratorState, "users"), false);
 
-  const freshClient = createClient();
-  await freshClient.initialize();
-  const freshState = await freshClient.signIn("ali", "demo123");
-  assert.deepEqual(
-    authenticatedUsers(freshState).map(function (user) {
-      return user.username;
-    }).sort(),
-    ["ali", "recepic"]
-  );
-  assert.equal(
-    authenticatedUsers(freshState).find(function (user) {
-      return user.username === "ali";
-    }).role,
-    "admin"
-  );
+  // Aynı sekmede F5 benzeri yeniden başlatma yönetici süresini korur.
+  await accessClient.initialize();
+  assert.equal(accessClient.isAdministrator(), true);
+
+  // Yönetici modu kapatıldığında görünmeyen anonim hesaba geri dönülür.
+  await accessClient.exitAdministrator();
+  assert.equal(accessClient.isAdministrator(), false);
+  assert.equal(accessClient.testAuthUser().isAnonymous, true);
+
+  const setupClient = createClient();
+  const setupState = await setupClient.initialize();
+  setupState.tables.push({ id: "table-test", name: "Test", items: [] });
+  setupClient.save(setupState);
+  await setupClient.flush();
 
   // İki bilgisayar aynı anda liste oluşturduğunda son yazan ilk listeyi ezmemelidir.
   const firstInventoryClient = createClient();
   const secondInventoryClient = createClient();
   await firstInventoryClient.initialize();
   await secondInventoryClient.initialize();
-  const firstInventoryState = await firstInventoryClient.signIn("recepic", "demo123");
-  const secondInventoryState = await secondInventoryClient.signIn("ali", "demo123");
+  const firstInventoryState = await firstInventoryClient.initialize();
+  const secondInventoryState = await secondInventoryClient.initialize();
 
   firstInventoryState.tables.push({ id: "table-first", name: "Birinci", items: [] });
   secondInventoryState.tables.push({ id: "table-second", name: "İkinci", items: [] });
@@ -336,8 +320,8 @@ function authenticatedUsers(state) {
   const secondItemClient = createClient();
   await firstItemClient.initialize();
   await secondItemClient.initialize();
-  const firstItemState = await firstItemClient.signIn("recepic", "demo123");
-  const secondItemState = await secondItemClient.signIn("ali", "demo123");
+  const firstItemState = await firstItemClient.initialize();
+  const secondItemState = await secondItemClient.initialize();
   firstItemState.tables.find(function (table) {
     return table.id === "table-test";
   }).items.push({ id: "item-first", name: "Birinci malzeme" });
@@ -362,7 +346,7 @@ function authenticatedUsers(state) {
   // Aynı malzemeden iki kişi aynı anda çıkış yaptığında iki eksiltme de uygulanmalıdır.
   const seedClient = createClient();
   await seedClient.initialize();
-  const seedState = await seedClient.signIn("recepic", "demo123");
+  const seedState = await seedClient.initialize();
   seedState.tables.find(function (table) {
     return table.id === "table-test";
   }).items.find(function (item) {
@@ -375,8 +359,8 @@ function authenticatedUsers(state) {
   const secondMovementClient = createClient();
   await firstMovementClient.initialize();
   await secondMovementClient.initialize();
-  const firstMovementState = await firstMovementClient.signIn("recepic", "demo123");
-  const secondMovementState = await secondMovementClient.signIn("ali", "demo123");
+  const firstMovementState = await firstMovementClient.initialize();
+  const secondMovementState = await secondMovementClient.initialize();
   firstMovementState.tables.find(function (table) {
     return table.id === "table-test";
   }).items.find(function (item) {
@@ -413,7 +397,7 @@ function authenticatedUsers(state) {
   // Bağlantı yavaşken aynı istemcinin peş peşe yaptığı işlemler tekrar sayılmamalıdır.
   const rapidClient = createClient();
   await rapidClient.initialize();
-  const rapidState = await rapidClient.signIn("recepic", "demo123");
+  const rapidState = await rapidClient.initialize();
   const rapidItem = rapidState.tables.find(function (table) {
     return table.id === "table-test";
   }).items.find(function (item) {
@@ -437,7 +421,7 @@ function authenticatedUsers(state) {
   // Eski açık ekrandan gelen bir düzenleme, başka kullanıcının sildiği kaydı diriltmemelidir.
   const deletionSeedClient = createClient();
   await deletionSeedClient.initialize();
-  const deletionSeedState = await deletionSeedClient.signIn("recepic", "demo123");
+  const deletionSeedState = await deletionSeedClient.initialize();
   deletionSeedState.tables.push({
     id: "table-delete",
     name: "Silinecek",
@@ -450,8 +434,8 @@ function authenticatedUsers(state) {
   const staleClient = createClient();
   await deletingClient.initialize();
   await staleClient.initialize();
-  const deletingState = await deletingClient.signIn("recepic", "demo123");
-  const staleState = await staleClient.signIn("ali", "demo123");
+  const deletingState = await deletingClient.initialize();
+  const staleState = await staleClient.initialize();
   deletingState.tables = deletingState.tables.filter(function (table) {
     return table.id !== "table-delete";
   });
@@ -477,7 +461,7 @@ function authenticatedUsers(state) {
   });
   const emptyTableClient = createClient();
   await emptyTableClient.initialize();
-  const emptyTableState = await emptyTableClient.signIn("recepic", "demo123");
+  const emptyTableState = await emptyTableClient.initialize();
   assert.deepEqual(
     emptyTableState.tables.find(function (table) {
       return table.id === "table-empty-from-firebase";
@@ -485,43 +469,42 @@ function authenticatedUsers(state) {
     []
   );
 
-  // İki yönetici farklı kategori tanımları eklerse ikisi de ortak listede kalmalıdır.
-  const firstDefinitionClient = createClient();
-  const secondDefinitionClient = createClient();
-  await firstDefinitionClient.initialize();
-  await secondDefinitionClient.initialize();
-  const firstDefinitionState = await firstDefinitionClient.signIn("recepic", "demo123");
-  const secondDefinitionState = await secondDefinitionClient.signIn("ali", "demo123");
-  firstDefinitionState.definitions.categories.push({
-    id: "category-first",
-    name: "Birinci kategori"
+  // Eski Firebase verisi yalnız bellekte dönüşmemeli; ilk girişte kategori ve
+  // kılıf seçenekleri tablo şemasına kalıcı olarak yazılmalıdır.
+  sharedDatabase.appState.tables.push({
+    id: "table-legacy-catalog",
+    name: "Eski Stok",
+    kind: "stock",
+    items: [{ id: "legacy-item", category: "Analog IC", footprint: "SOIC-8" }]
   });
-  secondDefinitionState.definitions.categories.push({
-    id: "category-second",
-    name: "İkinci kategori"
+  sharedDatabase.appState.definitions = {
+    categories: [{ id: "category-analog", name: "Analog IC" }],
+    footprints: ["SOIC-8"]
+  };
+  const legacyMigrationClient = createClient();
+  await legacyMigrationClient.initialize();
+  const legacyMigrationState = await legacyMigrationClient.initialize();
+  assert.equal(Object.prototype.hasOwnProperty.call(legacyMigrationState, "definitions"), false);
+  const migratedCloudTable = valueAtPath("appState/tables").find(function (table) {
+    return table.id === "table-legacy-catalog";
   });
-  firstDefinitionClient.save(firstDefinitionState);
-  secondDefinitionClient.save(secondDefinitionState);
-  await Promise.all([
-    firstDefinitionClient.flush(),
-    secondDefinitionClient.flush()
-  ]);
   assert.deepEqual(
-    valueAtPath("appState/definitions/categories").map(function (category) {
-      return category.id;
-    }).sort(),
-    ["category-first", "category-second"]
+    migratedCloudTable.columns.find(function (column) { return column.key === "category"; }).options,
+    ["Analog IC"]
+  );
+  assert.deepEqual(
+    migratedCloudTable.columns.find(function (column) { return column.key === "footprint"; }).options,
+    ["SOIC-8"]
   );
 
-  // Toplu JSON içe aktarma çağrısı ancak Firebase yazısı tamamlandıktan sonra
-  // çözülmeli ve bağımsız kılıf kataloğunu da ortak veriye taşımalıdır.
+  // Eski JSON içe aktarması ayrı kategori/kılıf kataloglarını bir kez gerçek
+  // combobox sütunlarına taşımalı ve kayıt ancak Firebase yazısı bitince dönmelidir.
   const importClient = createClient();
   await importClient.initialize();
-  const importSession = await importClient.signIn("recepic", "demo123");
+  const importSession = await importClient.initialize();
   const importedState = await importClient.replace({
     schemaVersion: 7,
-    users: importSession.users,
-    tables: [{ id: "table-import", name: "İçe Aktarılan", items: [] }],
+    tables: [{ id: "table-import", name: "İçe Aktarılan", kind: "stock", items: [] }],
     logs: [],
     definitions: {
       categories: [{
@@ -534,9 +517,20 @@ function authenticatedUsers(state) {
     settings: importSession.settings
   });
   assert.equal(importedState.tables[0].id, "table-import");
-  assert.deepEqual(valueAtPath("appState/definitions/footprints"), ["TEST-8", "TEST-16"]);
+  assert.equal(Object.prototype.hasOwnProperty.call(importedState, "definitions"), false);
+  const importedCloudTable = valueAtPath("appState/tables").find(function (table) {
+    return table.id === "table-import";
+  });
+  assert.deepEqual(
+    importedCloudTable.columns.find(function (column) { return column.key === "category"; }).options,
+    ["İçe aktarma kategorisi"]
+  );
+  assert.deepEqual(
+    importedCloudTable.columns.find(function (column) { return column.key === "footprint"; }).options,
+    ["TEST-8", "TEST-16"]
+  );
 
-  console.log("OK: Kullanıcılar, yetkiler, import, katalog ve eşzamanlı stok kayıtları kararlı.");
+  console.log("OK: Anonim erişim, yönetici kilidi, eski JSON geçişi ve eşzamanlı stok kayıtları kararlı.");
 }()).catch(function (error) {
   console.error(error);
   process.exitCode = 1;

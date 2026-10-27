@@ -5,7 +5,6 @@
 
   // Yalnızca o anki ekranda gereken geçici bilgiler ana JSON dosyasına yazılmaz.
   const ui = {
-    authMode: "login",
     leftTab: "lists",
     rightTab: "stock-card",
     activeItemId: null,
@@ -21,25 +20,18 @@
     draggedColumn: null,
     isResizingColumn: false,
     suppressColumnClick: false,
-    definitionView: "categories",
-    definitionCategoryId: "",
-    definitionFootprint: "",
     definitionTableId: "",
-    definitionColumnKey: ""
+    definitionColumnKey: "",
+    administratorFailures: 0,
+    administratorLockedUntil: 0,
+    accessModeChanging: false
   };
 
-  let categoryCombo = null;
-  let footprintCombo = null;
+  let dynamicFieldCombos = [];
 
   const $ = function (id) {
     return document.getElementById(id);
   };
-
-  const columnMap = new Map(
-    window.DepoData.columnDefinitions.map(function (column) {
-      return [column.key, column];
-    })
-  );
 
   const defaultColumnWidths = {
     id: 100,
@@ -65,6 +57,15 @@
     checkedAt: 130,
     description: 230,
     updatedAt: 145
+  };
+
+  const columnTypeLabels = {
+    text: "Metin",
+    multiline: "Uzun metin",
+    number: "Sayı",
+    date: "Tarih",
+    checkbox: "Checkbox",
+    select: "Combobox"
   };
 
   const defaultHistoryColumnWidths = {
@@ -143,6 +144,9 @@
     if (/invalid-credential|wrong-password|invalid-login-credentials/i.test(message)) {
       return "Mevcut şifre hatalı.";
     }
+    if (/operation-not-allowed|admin-restricted-operation/i.test(message)) {
+      return "Firebase Authentication içinde Anonim giriş sağlayıcısını etkinleştirin.";
+    }
     if (/email-already-in-use/i.test(message)) {
       return "Bu kullanıcı adı kullanılıyor. Daha özgün bir ad seçin.";
     }
@@ -175,20 +179,20 @@
     }, 1000);
   }
 
-  function currentUser() {
-    return state.users.find(function (user) {
-      return user.id === state.session.currentUserId;
-    }) || null;
+  function currentOperatorName() {
+    return String(state.session.operatorName || "Kullanıcı").trim() || "Kullanıcı";
   }
 
   function currentUserIsAdmin() {
-    const user = currentUser();
-    return Boolean(user && user.role === "admin");
+    return Boolean(window.DepoStore && window.DepoStore.isAdministrator());
   }
 
-  function requireAdministrator() {
-    if (currentUserIsAdmin()) return true;
-    showToast("Bu işlem yalnızca yöneticiler tarafından yapılabilir.", true);
+  function requireAdministrator(resume) {
+    if (currentUserIsAdmin()) {
+      window.DepoStore.touchAdministratorSession();
+      return true;
+    }
+    openAdministratorPrompt(resume);
     return false;
   }
 
@@ -222,18 +226,67 @@
     return normalizeText(table.name).includes("kalitekontrol") ? "quality" : "stock";
   }
 
-  function defaultColumnsForKind(kind) {
+  function normalizedColumnType(column, fallback) {
+    const candidate = column && column.fieldType || fallback && fallback.fieldType;
+    if (Object.prototype.hasOwnProperty.call(columnTypeLabels, candidate)) return candidate;
+    if ((column && column.numeric) || (fallback && fallback.numeric)) return "number";
+    return "text";
+  }
+
+  function normalizedColumnOptions(value) {
+    const seen = new Set();
+    return (Array.isArray(value) ? value : []).map(function (option) {
+      return String(option == null ? "" : option).trim();
+    }).filter(function (option) {
+      const key = normalizeText(option);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function itemOptionsForColumn(key) {
+    return normalizedColumnOptions(state.tables.flatMap(function (table) {
+      return (Array.isArray(table.items) ? table.items : []).map(function (item) {
+        return item[key];
+      });
+    }));
+  }
+
+  function reusableColumnOptions(key, currentTable) {
+    const sourceTable = state.tables.find(function (table) {
+      if (table === currentTable || !Array.isArray(table.columns)) return false;
+      return table.columns.some(function (column) {
+        return column.key === key && Array.isArray(column.options) && column.options.length;
+      });
+    });
+    if (sourceTable) {
+      const sourceColumn = sourceTable.columns.find(function (column) { return column.key === key; });
+      return normalizedColumnOptions(sourceColumn.options);
+    }
+    return itemOptionsForColumn(key);
+  }
+
+  function defaultColumnsForKind(kind, currentTable) {
     const definitions = kind === "quality"
       ? window.DepoData.qualityColumnDefinitions
       : window.DepoData.stockColumnDefinitions;
     return definitions.map(function (column) {
+      let options = normalizedColumnOptions(column.options);
+      if (!options.length && kind === "stock" && ["category", "footprint"].includes(column.key)) {
+        options = reusableColumnOptions(column.key, currentTable);
+      }
       return {
         key: column.key,
         label: column.label,
         visible: true,
         width: (kind === "quality" ? qualityDefaultColumnWidths : defaultColumnWidths)[column.key] || 120,
         system: true,
-        numeric: Boolean(column.numeric)
+        fieldType: normalizedColumnType(column),
+        options: options,
+        editable: column.editable !== false,
+        integer: Boolean(column.integer),
+        numeric: normalizedColumnType(column) === "number"
       };
     });
   }
@@ -242,41 +295,80 @@
     if (!table) return [];
     const kind = tableKind(table);
     table.kind = kind;
-    const defaults = defaultColumnsForKind(kind);
+    const defaults = defaultColumnsForKind(kind, table);
+    const deletedKeys = new Set(Array.isArray(table.deletedColumnKeys) ? table.deletedColumnKeys : []);
     const existingLooksLikeStock = kind === "quality" && Array.isArray(table.columns) &&
       table.columns.some(function (column) { return ["category", "footprint", "critical"].includes(column.key); }) &&
       !table.columns.some(function (column) { return column.key === "materialName"; });
-    const existing = Array.isArray(table.columns) && table.columns.length && !existingLooksLikeStock
-      ? table.columns
+    const hasStoredColumns = Array.isArray(table.columns) && !existingLooksLikeStock;
+    const existing = hasStoredColumns
+      ? table.columns.slice()
       : (kind === "stock"
         ? state.settings.columnOrder.map(function (key) {
-          const column = columnMap.get(key);
+          const column = defaults.find(function (entry) { return entry.key === key; });
           return column ? {
             key: key,
             label: column.label,
             visible: state.settings.visibleColumns.includes(key),
-        width: (state.settings.columnWidths || {})[key] || defaultColumnWidths[key] || 120,
+            width: (state.settings.columnWidths || {})[key] || defaultColumnWidths[key] || 120,
             system: true,
-            numeric: Boolean(column.numeric)
+            fieldType: column.fieldType,
+            options: normalizedColumnOptions(column.options),
+            editable: column.editable,
+            integer: column.integer,
+            numeric: column.numeric
           } : null;
         }).filter(Boolean)
         : defaults);
     const byKey = new Map(existing.map(function (column) { return [column.key, column]; }));
     defaults.forEach(function (column) {
-      if (!byKey.has(column.key)) existing.push(column);
+      if (!byKey.has(column.key) && !deletedKeys.has(column.key)) existing.push(column);
     });
-    table.columns = existing.map(function (column) {
-      const fallback = byKey.get(column.key) || defaults.find(function (entry) { return entry.key === column.key; }) || {};
+    const seenKeys = new Set();
+    table.columns = existing.filter(function (column) {
+      if (!column || !column.key || deletedKeys.has(column.key) || seenKeys.has(column.key)) return false;
+      seenKeys.add(column.key);
+      return true;
+    }).map(function (column) {
+      const fallback = defaults.find(function (entry) { return entry.key === column.key; }) || {};
+      const fieldType = normalizedColumnType(column, fallback);
+      let options = normalizedColumnOptions(
+        Array.isArray(column.options) ? column.options : fallback.options
+      );
+      if (!options.length && kind === "stock" && ["category", "footprint"].includes(column.key)) {
+        options = reusableColumnOptions(column.key, table);
+      }
       return {
         key: column.key,
         label: column.label || fallback.label || column.key,
         visible: column.visible !== false,
         width: Math.max(55, Number(column.width) || fallback.width || 120),
-        system: column.system !== false,
-        numeric: Boolean(column.numeric || fallback.numeric)
+        system: column.system === true || fallback.system === true,
+        fieldType: fieldType,
+        options: options,
+        editable: column.editable !== false && fallback.editable !== false,
+        integer: Boolean(column.integer || fallback.integer),
+        numeric: fieldType === "number"
       };
     });
+    table.deletedColumnKeys = Array.from(deletedKeys);
     return table.columns;
+  }
+
+  function tableHasColumn(table, key) {
+    return Boolean(tableColumn(table, key));
+  }
+
+  function tableColumn(table, key) {
+    if (!table) return null;
+    return ensureTableColumns(table).find(function (column) {
+      return column.key === key;
+    }) || null;
+  }
+
+  function tableHasNumberColumn(table, key) {
+    const column = tableColumn(table, key);
+    return Boolean(column && column.fieldType === "number");
   }
 
   function activeTableKind() {
@@ -286,20 +378,6 @@
 
   function stockLikeActiveTable() {
     return activeTableKind() === "stock";
-  }
-
-  function categoryDefinitions() {
-    return state.definitions && Array.isArray(state.definitions.categories)
-      ? state.definitions.categories
-      : [];
-  }
-
-  function categoryDefinition(name) {
-    return window.DepoCatalog.categoryByName(state.definitions, name);
-  }
-
-  function allDefinedFootprints() {
-    return window.DepoCatalog.allFootprints(state.definitions);
   }
 
   function integerValue(input, fallback) {
@@ -322,38 +400,25 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Giriş ve kayıt
+  // Firebase bağlantısı ve geçici yönetici modu
   // ---------------------------------------------------------------------------
-
-  function setAuthMode(mode) {
-    ui.authMode = mode;
-    document.querySelectorAll("[data-auth-mode]").forEach(function (button) {
-      button.classList.toggle("is-active", button.dataset.authMode === mode);
-    });
-    $("auth-name-field").hidden = mode !== "register";
-    $("auth-submit").textContent = mode === "register" ? "Hesap Oluştur" : "Giriş Yap";
-    $("auth-password").autocomplete = "off";
-    $("auth-error").hidden = true;
-  }
 
   function showAuthError(message) {
     $("auth-error").textContent = message;
     $("auth-error").hidden = false;
+    $("connection-retry").hidden = false;
   }
 
   function showAuthLoading() {
     $("auth-title").textContent = "Bağlantı kuruluyor";
-    $("auth-subtitle").textContent = "Oturumunuz kontrol ediliyor";
+    $("auth-subtitle").textContent = "Firebase ortak verisi hazırlanıyor";
     $("auth-loading").hidden = false;
-    $("auth-controls").hidden = true;
     $("auth-error").hidden = true;
+    $("connection-retry").hidden = true;
   }
 
-  function showAuthControls() {
-    $("auth-title").textContent = "Hoş geldiniz";
-    $("auth-subtitle").textContent = "Hesabınızla devam edin";
+  function hideAuthLoading() {
     $("auth-loading").hidden = true;
-    $("auth-controls").hidden = false;
   }
 
   function updateFileStatus() {
@@ -367,7 +432,6 @@
 
   function useLoadedState(loaded) {
     state = loaded;
-    // Firebase oturumu açıksa kullanıcı kimliği korunur ve sayfa yenilenince devam edilir.
     ui.activeItemId = null;
     ui.checkedIds.clear();
     ui.formItemId = null;
@@ -377,41 +441,6 @@
     $("auth-error").hidden = true;
   }
 
-  async function handleAuthSubmit(event) {
-    event.preventDefault();
-    const username = $("auth-username").value.trim();
-    const password = $("auth-password").value;
-
-    if (!username || !password) {
-      showAuthError("Kullanıcı adı ve şifre zorunludur.");
-      return;
-    }
-
-    const submitButton = $("auth-submit");
-    submitButton.disabled = true;
-    submitButton.textContent = "Bağlanıyor...";
-    $("auth-error").hidden = true;
-
-    try {
-      if (ui.authMode === "login") {
-        state = await window.DepoStore.signIn(username, password);
-      } else {
-        const name = $("auth-name").value.trim();
-        if (!name) {
-          showAuthError("Ad soyad alanı zorunludur.");
-          return;
-        }
-        state = await window.DepoStore.register(username, password, name);
-      }
-      openApplication();
-    } catch (error) {
-      showAuthError(friendlyErrorMessage(error, "Firebase bağlantısı kurulamadı."));
-    } finally {
-      submitButton.disabled = false;
-      submitButton.textContent = ui.authMode === "register" ? "Hesap Oluştur" : "Giriş Yap";
-    }
-  }
-
   function openApplication() {
     ensureValidSession();
     $("auth-overlay").hidden = true;
@@ -419,107 +448,98 @@
     applySettings();
     renderAll(true);
     window.DepoStore.watch(function (cloudState) {
-      const currentUserId = state.session.currentUserId;
-      cloudState.session.currentUserId = currentUserId;
+      cloudState.session.operatorName = state.session.operatorName;
       state = cloudState;
       ensureValidSession();
       renderAll(false);
     });
   }
 
-  function signOut() {
+  function editOperatorName() {
     openFormModal({
-      title: "Oturumu kapat",
-      message: "Oturumu kapatmak istiyor musunuz?",
-      submitLabel: "Çıkış Yap",
-      submitStyle: "danger",
-      onSubmit: async function () {
-        await window.DepoStore.signOut();
-        state.session.currentUserId = null;
+      title: "İşlem adını değiştir",
+      message: "Bu ad hareket geçmişindeki Alan/Veren ve Kontrol Eden alanlarında görünür.",
+      fields: [
+        { name: "name", label: "Ad Soyad", value: currentOperatorName(), required: true }
+      ],
+      submitLabel: "Kaydet",
+      onSubmit: function (values) {
+        const name = String(values.name || "").trim();
+        if (!name) throw new Error("Ad soyad alanı zorunludur.");
+        state.session.operatorName = name;
         saveState();
-        $("app").setAttribute("aria-hidden", "true");
-        $("auth-overlay").hidden = false;
-        $("auth-password").value = "";
-        setAuthMode("login");
-        showAuthControls();
-        return true;
-      }
-    });
-  }
-
-  function editCurrentAccount() {
-    const user = currentUser();
-    if (!user) return;
-
-    openFormModal({
-      title: "Hesap bilgileri",
-      message: "Kullanıcı adını değiştiriyorsanız mevcut şifrenizi de yazın.",
-      fields: [
-        { name: "name", label: "Ad Soyad", value: user.name, required: true },
-        { name: "username", label: "Kullanıcı adı", value: user.username, required: true },
-        {
-          name: "currentPassword",
-          label: "Mevcut şifre",
-          type: "password",
-          autocomplete: "current-password",
-          placeholder: "Yalnızca kullanıcı adı değişecekse gerekli"
-        }
-      ],
-      submitLabel: "Bilgileri Kaydet",
-      onSubmit: async function (values) {
-        const updated = await window.DepoStore.updateCurrentUserProfile({
-          name: values.name,
-          username: values.username,
-          currentPassword: values.currentPassword
-        });
-        Object.assign(user, updated);
-        $("auth-username").value = updated.username;
         renderAll(false);
-        showToast("Hesap bilgileri güncellendi.");
+        showToast("İşlem adı güncellendi.");
         return true;
       }
     });
   }
 
-  function changeCurrentPassword() {
+  function openAdministratorPrompt(resume) {
+    const remainingLock = Math.ceil((ui.administratorLockedUntil - Date.now()) / 1000);
+    if (remainingLock > 0) {
+      showToast("Çok fazla hatalı deneme yapıldı. " + remainingLock + " saniye bekleyin.", true);
+      return;
+    }
     openFormModal({
-      title: "Şifreyi değiştir",
+      title: "Yönetici modu",
+      message: "Bu işlem yönetici yetkisi gerektiriyor. Ortak yönetici parolasını yazın.",
       fields: [
         {
-          name: "currentPassword",
-          label: "Mevcut şifre",
+          name: "password",
+          label: "Yönetici parolası",
           type: "password",
           autocomplete: "current-password",
           required: true
-        },
-        {
-          name: "newPassword",
-          label: "Yeni şifre",
-          type: "password",
-          autocomplete: "new-password",
-          required: true
-        },
-        {
-          name: "confirmPassword",
-          label: "Yeni şifre tekrar",
-          type: "password",
-          autocomplete: "new-password",
-          required: true
         }
       ],
-      submitLabel: "Şifreyi Değiştir",
+      submitLabel: "Yönetici Moduna Geç",
       onSubmit: async function (values) {
-        if (values.newPassword !== values.confirmPassword) {
-          throw new Error("Yeni şifreler birbiriyle aynı değil.");
+        try {
+          const loaded = await window.DepoStore.enterAdministrator(values.password);
+          ui.administratorFailures = 0;
+          ui.administratorLockedUntil = 0;
+          useLoadedState(loaded);
+          renderAll(true);
+          showToast("Yönetici modu açıldı.");
+          if (typeof resume === "function") {
+            window.setTimeout(resume, 0);
+          }
+          return true;
+        } catch (error) {
+          ui.administratorFailures += 1;
+          if (ui.administratorFailures >= 5) {
+            ui.administratorFailures = 0;
+            ui.administratorLockedUntil = Date.now() + 30000;
+            throw new Error("Çok fazla hatalı deneme yapıldı. 30 saniye bekleyin.");
+          }
+          throw error;
         }
-        await window.DepoStore.changeCurrentUserPassword(
-          values.currentPassword,
-          values.newPassword
-        );
-        showToast("Şifreniz değiştirildi.");
-        return true;
       }
     });
+  }
+
+  async function exitAdministratorMode(showMessage) {
+    if (ui.accessModeChanging) return;
+    ui.accessModeChanging = true;
+    try {
+      const loaded = await window.DepoStore.exitAdministrator();
+      useLoadedState(loaded);
+      renderAll(true);
+      if (showMessage !== false) showToast("Yönetici modu kapatıldı.");
+    } catch (error) {
+      showToast(friendlyErrorMessage(error, "Normal kullanıcı moduna dönülemedi."), true);
+    } finally {
+      ui.accessModeChanging = false;
+    }
+  }
+
+  function checkAdministratorExpiration() {
+    if (ui.accessModeChanging) return;
+    if (window.DepoStore.hasAdministratorIdentity() && !currentUserIsAdmin()) {
+      exitAdministratorMode(false);
+      showToast("Yönetici modu süre dolduğu için kapatıldı.");
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -550,7 +570,6 @@
     [
       ["Üst bilgi", renderHeader],
       ["Listeler", renderListsPanel],
-      ["Kullanıcılar", renderUsersPanel],
       ["Açık liste sekmeleri", renderOpenTableTabs],
       ["Stok tablosu", renderStockTable],
       ["Stok kartı", function () { syncStockForm(Boolean(forceForm)); }],
@@ -569,14 +588,15 @@
   }
 
   function renderHeader() {
-    const user = currentUser();
     const active = activeTableReference();
+    const isAdministrator = currentUserIsAdmin();
     const fileName = window.DepoStore.fileName() || "JSON bağlı değil";
     const context = fileName + (active ? " / " + active.table.name : "");
     $("header-context").textContent = context;
-    $("current-user-button").textContent = user
-      ? user.name + (user.role === "admin" ? " · Yönetici" : " · Üye")
-      : "Kullanıcı";
+    $("current-user-button").textContent = currentOperatorName() +
+      (isAdministrator ? " · Yönetici" : "");
+    $("enter-admin-menu").hidden = isAdministrator;
+    $("exit-admin-menu").hidden = !isAdministrator;
     updateFileStatus();
   }
 
@@ -598,49 +618,6 @@
       button.classList.toggle("is-active", button.dataset.leftTab === tab);
     });
     if (window.DepoDock) window.DepoDock.showPanel(tab);
-  }
-
-  function renderUsersPanel() {
-    if (!currentUserIsAdmin()) {
-      $("users-summary").textContent = "";
-      $("user-list").innerHTML = "";
-      return;
-    }
-    const signedUpUsers = state.users.filter(function (user) {
-      return Boolean(user.authUid);
-    });
-    $("users-summary").textContent = signedUpUsers.length + " kayıtlı kullanıcı";
-    $("user-list").innerHTML = signedUpUsers.map(function (user) {
-      const isCurrent = user.id === state.session.currentUserId;
-      return '<div class="user-list-item">' +
-        '<span class="user-avatar">' + escapeHtml((user.name || user.username).slice(0, 1).toUpperCase()) + '</span>' +
-        '<span class="user-identity"><strong>' + escapeHtml(user.name || user.username) + '</strong>' +
-        '<small>@' + escapeHtml(user.username) + (isCurrent ? " · Siz" : "") + '</small></span>' +
-        '<select class="user-role-select" data-user-role-id="' + escapeHtml(user.id) + '"' +
-        ' aria-label="Kullanıcı yetkisi">' +
-        '<option value="member"' + (user.role !== "admin" ? " selected" : "") + '>Üye</option>' +
-        '<option value="admin"' + (user.role === "admin" ? " selected" : "") + '>Yönetici</option>' +
-        '</select></div>';
-    }).join("");
-  }
-
-  async function changeUserRole(userId, role) {
-    if (!requireAdministrator()) return;
-    const user = state.users.find(function (entry) { return entry.id === userId; });
-    if (!user || !["admin", "member"].includes(role)) return;
-
-    const previousRole = user.role;
-    user.role = role;
-    renderUsersPanel();
-
-    try {
-      await window.DepoStore.setUserRole(userId, role);
-      showToast(user.name + " artık " + (role === "admin" ? "yönetici." : "üye."));
-    } catch (error) {
-      user.role = previousRole;
-      renderUsersPanel();
-      showToast(friendlyErrorMessage(error, "Kullanıcı yetkisi değiştirilemedi."), true);
-    }
   }
 
   function renderOpenTableTabs() {
@@ -737,6 +714,43 @@
     });
   }
 
+  function columnOptionValues(column) {
+    if (!column) return [];
+    return normalizedColumnOptions(column.options);
+  }
+
+  function checkboxValue(value) {
+    if (value === true || value === 1) return true;
+    return ["true", "1", "evet", "var", "onaylandi", "secili"].includes(normalizeText(value));
+  }
+
+  function dateInputValue(value) {
+    const text = String(value || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+    const turkishDate = text.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+    if (!turkishDate) return "";
+    return turkishDate[3] + "-" + turkishDate[2].padStart(2, "0") + "-" +
+      turkishDate[1].padStart(2, "0");
+  }
+
+  function tableCellText(column, value) {
+    if (column.fieldType === "checkbox") return checkboxValue(value) ? "Evet" : "Hayır";
+    return String(value == null ? "" : value);
+  }
+
+  function tableCellHtml(column, value) {
+    if (column.fieldType === "checkbox") {
+      return '<td class="checkbox-cell" data-stock-column="' + escapeHtml(column.key) +
+        '" style="' + columnWidthStyle("stock", column.key) + '" title="' +
+        (checkboxValue(value) ? "Evet" : "Hayır") + '"><input type="checkbox" disabled' +
+        (checkboxValue(value) ? " checked" : "") + "></td>";
+    }
+    const text = tableCellText(column, value);
+    return '<td data-stock-column="' + escapeHtml(column.key) + '" style="' +
+      columnWidthStyle("stock", column.key) + '" title="' + escapeHtml(text) + '">' +
+      escapeHtml(text) + "</td>";
+  }
+
   function fuzzyMatch(query, item) {
     if (!query) return true;
     const normalizedQuery = normalizeText(query);
@@ -793,17 +807,29 @@
       ui.sortDirection = "asc";
     }
     const query = $("stock-search").value.trim();
-    const criticalOnly = stockLikeActiveTable() && $("critical-only").checked;
+    const supportsCriticalStock = stockLikeActiveTable() &&
+      tableHasNumberColumn(active.table, "quantity") &&
+      tableHasNumberColumn(active.table, "critical");
+    const criticalOnly = supportsCriticalStock && $("critical-only").checked;
     const items = active.table.items.filter(function (item) {
-      const isCritical = stockLikeActiveTable() && Number(item.quantity) <= Number(item.critical);
+      const isCritical = supportsCriticalStock && Number(item.quantity) <= Number(item.critical);
       return (!criticalOnly || isCritical) && fuzzyMatch(query, item);
     });
     const direction = ui.sortDirection === "asc" ? 1 : -1;
-    return items.sort(function (left, right) {
+    const sortColumn = activeColumns.find(function (column) { return column.key === ui.sortKey; }) || {};
+    return items.slice().sort(function (left, right) {
       const leftValue = left[ui.sortKey];
       const rightValue = right[ui.sortKey];
-      if (typeof leftValue === "number" && typeof rightValue === "number") {
-        return (leftValue - rightValue) * direction;
+      if (sortColumn.fieldType === "number") {
+        return ((Number(leftValue) || 0) - (Number(rightValue) || 0)) * direction;
+      }
+      if (sortColumn.fieldType === "checkbox") {
+        return (Number(checkboxValue(leftValue)) - Number(checkboxValue(rightValue))) * direction;
+      }
+      if (sortColumn.fieldType === "date") {
+        const leftDate = dateInputValue(leftValue) || String(leftValue || "");
+        const rightDate = dateInputValue(rightValue) || String(rightValue || "");
+        return leftDate.localeCompare(rightDate) * direction;
       }
       return String(leftValue || "").localeCompare(String(rightValue || ""), "tr", {
         numeric: true,
@@ -814,6 +840,11 @@
 
   function stockClass(item) {
     if (!stockLikeActiveTable()) return "";
+    const active = activeTableReference();
+    if (!active || !tableHasNumberColumn(active.table, "quantity") ||
+        !tableHasNumberColumn(active.table, "critical")) {
+      return "";
+    }
     const quantity = Number(item.quantity) || 0;
     const critical = Number(item.critical) || 0;
     if (quantity <= critical) return " stock-critical";
@@ -836,8 +867,11 @@
     const allVisibleChecked = visibleItems.length > 0 && visibleItems.every(function (item) {
       return ui.checkedIds.has(item.id);
     });
-    $("critical-only").closest("label").hidden = activeKind !== "stock";
-    if (activeKind !== "stock") $("critical-only").checked = false;
+    const supportsCriticalStock = activeKind === "stock" &&
+      tableHasNumberColumn(active.table, "quantity") &&
+      tableHasNumberColumn(active.table, "critical");
+    $("critical-only").closest("label").hidden = !supportsCriticalStock;
+    if (!supportsCriticalStock) $("critical-only").checked = false;
     $("stock-search").placeholder = activeKind === "quality"
       ? "Kalite kontrol kayıtlarında ara"
       : "Malzeme adı, ID, kategori, açıklama ara";
@@ -865,10 +899,7 @@
         '<td class="select-cell" data-checkbox-item="' + escapeHtml(item.id) + '">' +
         '<input type="checkbox"' + (ui.checkedIds.has(item.id) ? " checked" : "") + '></td>' +
         columns.map(function (column) {
-          return '<td data-stock-column="' + escapeHtml(column.key) + '" style="' +
-            columnWidthStyle("stock", column.key) + '" title="' +
-            escapeHtml(item[column.key]) + '">' +
-            escapeHtml(item[column.key]) + "</td>";
+          return tableCellHtml(column, item[column.key]);
         }).join("") + "</tr>";
     }).join("");
 
@@ -917,25 +948,56 @@
     }).join("");
   }
 
-  function addCustomColumn(name, targetTable) {
+  function addCustomColumn(name, targetTable, configuration) {
     const table = targetTable || (activeTableReference() || {}).table;
     if (!table) return null;
     const cleanName = String(name || "").trim();
     if (!cleanName) return null;
     const columns = ensureTableColumns(table);
+    const config = configuration || {};
     const key = "custom_" + normalizeText(cleanName) + "_" + Math.random().toString(36).slice(2, 6);
+    const fieldType = normalizedColumnType(config);
     const column = {
       key: key,
       label: cleanName,
       visible: true,
       width: 140,
-      system: false
+      system: false,
+      fieldType: fieldType,
+      options: fieldType === "select" ? normalizedColumnOptions(config.options) : [],
+      editable: true,
+      integer: Boolean(config.integer),
+      numeric: fieldType === "number"
     };
     columns.push(column);
+    table.deletedColumnKeys = (table.deletedColumnKeys || []).filter(function (entry) {
+      return entry !== key;
+    });
     table.items.forEach(function (item) {
-      item[key] = "";
+      item[key] = defaultValueForColumn(column);
     });
     return column;
+  }
+
+  function valueForColumnType(value, column) {
+    if (column.fieldType === "checkbox") return checkboxValue(value);
+    if (column.fieldType === "number") {
+      if (value === "" || value == null) return "";
+      const number = Number(value);
+      if (!Number.isFinite(number)) return "";
+      return column.integer ? Math.trunc(number) : number;
+    }
+    return String(value == null ? "" : value);
+  }
+
+  function normalizeColumnItemValues(table, column) {
+    table.items.forEach(function (item) {
+      if (!Object.prototype.hasOwnProperty.call(item, column.key)) {
+        item[column.key] = defaultValueForColumn(column);
+        return;
+      }
+      item[column.key] = valueForColumnType(item[column.key], column);
+    });
   }
 
   function updateColumnVisibility(key, visible) {
@@ -968,13 +1030,18 @@
     const table = targetTable || (activeTableReference() || {}).table;
     if (!table) return;
     const column = ensureTableColumns(table).find(function (entry) { return entry.key === key; });
-    if (!column || column.system) return;
+    if (!column) return;
     table.columns = table.columns.filter(function (entry) {
       return entry.key !== key;
     });
-    table.items.forEach(function (item) {
-      delete item[key];
-    });
+    table.deletedColumnKeys = Array.from(new Set((table.deletedColumnKeys || []).concat(key)));
+    // Varsayılan alanların verisini içeride koruruz. Böylece yanlışlıkla silinen
+    // bir sütun sıfırlanınca eski kayıtlar geri gelir; özel sütun gerçekten silinir.
+    if (!column.system) {
+      table.items.forEach(function (item) {
+        delete item[key];
+      });
+    }
     saveState();
     renderColumnsModal();
     renderAll(true);
@@ -1025,12 +1092,12 @@
     });
     $("definition-column-list").innerHTML = columns.length
       ? columns.map(function (column) {
-        const meta = column.system ? "sabit" : "özel";
-        return '<button type="button" class="definition-category-button' +
+        const meta = columnTypeLabels[column.fieldType] || "Metin";
+        return '<button type="button" class="definition-list-button' +
           (column.key === ui.definitionColumnKey ? " is-active" : "") +
           '" data-definition-column="' + escapeHtml(column.key) + '"><span>' +
           escapeHtml(column.label) + '</span><small>' +
-          (column.visible === false ? "gizli" : meta) + "</small></button>";
+          (column.visible === false ? "gizli · " : "") + meta + "</small></button>";
       }).join("")
       : '<div class="combo-empty">Sütun bulunamadı</div>';
   }
@@ -1044,19 +1111,49 @@
     ui.definitionColumnKey = column ? column.key : "";
     $("definition-column-key").value = column ? column.key : "";
     $("definition-column-name").value = column ? column.label : "";
+    $("definition-column-type").value = column ? column.fieldType : "text";
+    $("definition-column-options").value = column ? columnOptionValues(column).join("\n") : "";
     $("definition-column-visible").checked = column ? column.visible !== false : true;
     $("definition-column-name").disabled = !table;
+    $("definition-column-type").disabled = !table;
     $("definition-column-visible").disabled = !table;
     $("delete-definition-column").hidden = !column;
-    $("delete-definition-column").disabled = Boolean(column && column.system);
+    $("delete-definition-column").disabled = !column;
+    syncDefinitionColumnTypeFields();
     showDefinitionColumnError(table ? "" : "Önce bir liste oluşturun.");
     renderDefinitionColumnList();
     if (table) window.setTimeout(function () { $("definition-column-name").focus(); }, 0);
   }
 
+  function syncDefinitionColumnTypeFields() {
+    const type = $("definition-column-type").value;
+    const optionsField = $("definition-column-options-field");
+    const optionsInput = $("definition-column-options");
+    optionsField.hidden = type !== "select";
+    optionsInput.disabled = type !== "select";
+    $("definition-column-options-help").textContent =
+      "Her satıra bir seçenek yazın. Kategori ve kılıf seçenekleri de burada yönetilir.";
+  }
+
+  function usedRemovedSelectOptions(table, column, nextOptions) {
+    if (!column || column.fieldType !== "select") return [];
+    const allowed = new Set(nextOptions.map(normalizeText));
+    const usage = new Map();
+    table.items.forEach(function (item) {
+      const value = String(item[column.key] == null ? "" : item[column.key]).trim();
+      const normalized = normalizeText(value);
+      if (!normalized || allowed.has(normalized)) return;
+      const current = usage.get(normalized) || { value: value, count: 0 };
+      current.count += 1;
+      usage.set(normalized, current);
+    });
+    return Array.from(usage.values());
+  }
+
   function saveDefinitionColumn(event) {
     event.preventDefault();
-    if (!requireAdministrator()) return;
+    if (!requireAdministrator(function () { saveDefinitionColumn(event); })) return;
+    ui.definitionTableId = $("definition-column-table").value || ui.definitionTableId;
     const table = definitionTable();
     if (!table) {
       showDefinitionColumnError("Önce bir liste oluşturun.");
@@ -1065,6 +1162,7 @@
     const key = $("definition-column-key").value;
     const name = $("definition-column-name").value.trim();
     const visible = $("definition-column-visible").checked;
+    const fieldType = $("definition-column-type").value;
     if (!name) {
       showDefinitionColumnError("Sütun adı zorunludur.");
       return;
@@ -1079,31 +1177,53 @@
     }
 
     let column = columns.find(function (entry) { return entry.key === key; });
+    const options = fieldType === "select"
+      ? normalizedColumnOptions($("definition-column-options").value.split(/\r?\n/))
+      : (column ? column.options : []);
+    if (fieldType === "select" && !options.length) {
+      showDefinitionColumnError("Combobox için en az bir seçenek yazın.");
+      $("definition-column-options").focus();
+      return;
+    }
+    const removedOptions = fieldType === "select"
+      ? usedRemovedSelectOptions(table, column, options)
+      : [];
+    if (removedOptions.length) {
+      const summary = removedOptions.map(function (entry) {
+        return '"' + entry.value + '" (' + entry.count + " kayıt)";
+      }).join(", ");
+      showDefinitionColumnError(
+        "Kullanılan seçenekler silinemez: " + summary +
+        ". Önce ilgili kayıtları başka bir seçeneğe taşıyın."
+      );
+      return;
+    }
     if (column) {
       column.label = name;
       column.visible = visible;
+      column.fieldType = fieldType;
+      column.numeric = fieldType === "number";
+      column.options = fieldType === "select" ? options : [];
+      normalizeColumnItemValues(table, column);
     } else {
-      column = addCustomColumn(name, table);
+      column = addCustomColumn(name, table, {
+        fieldType: fieldType,
+        options: options
+      });
       if (column) column.visible = visible;
     }
     saveState();
     renderAll(true);
-    renderDefinitionTabCounts();
     loadDefinitionColumnEditor(column ? column.key : "");
     showToast("Sütun tanımı kaydedildi.");
   }
 
   function deleteDefinitionColumn() {
-    if (!requireAdministrator()) return;
+    if (!requireAdministrator(deleteDefinitionColumn)) return;
     const column = selectedDefinitionColumn();
     if (!column) return;
-    if (column.system) {
-      showDefinitionColumnError("Sabit sütunlar silinmez. İsterseniz görünürlüğünü kapatabilirsiniz.");
-      return;
-    }
     const table = definitionTable();
     deleteCustomColumn(column.key, table);
-    renderDefinitionTabCounts();
     const first = definitionColumns()[0];
     loadDefinitionColumnEditor(first ? first.key : "");
     showToast("Sütun tanımı silindi.");
@@ -1115,7 +1235,14 @@
 
   function itemDisplayName(item) {
     if (!item) return "";
-    return item.name || item.materialName || item.id || "";
+    if (item.name || item.materialName) return item.name || item.materialName;
+    const active = activeTableReference();
+    const firstValue = active && ensureTableColumns(active.table).map(function (column) {
+      return item[column.key];
+    }).find(function (value) {
+      return value !== "" && value != null && typeof value !== "boolean";
+    });
+    return firstValue || item.id || "";
   }
 
   function generatedRecordId() {
@@ -1135,99 +1262,89 @@
     return generatedRecordId();
   }
 
-  function categoryComboOptions() {
-    return categoryDefinitions().map(function (category) {
-      return category.name;
-    });
-  }
-
-  function footprintComboOptions() {
-    return allDefinedFootprints();
-  }
-
-  function syncFootprintField() {
-    const input = $("item-footprint");
-    const toggle = $("item-footprint-toggle");
-
-    $("item-footprint-label").hidden = false;
-    input.disabled = false;
-    toggle.disabled = false;
-    input.required = false;
-    input.placeholder = "Kılıf seçin (isteğe bağlı)";
-    if (footprintCombo) footprintCombo.refresh();
-  }
-
   function setStockForm(item) {
     const isStock = stockLikeActiveTable();
-    $("stock-form-grid").hidden = !isStock;
-    $("custom-card-fields").hidden = isStock;
     $("stock-card-panel").querySelector(".section-heading h2").textContent = isStock ? "Stok Kartı" : "Kayıt Kartı";
     const stockCardTab = document.querySelector('[data-right-tab="stock-card"]');
     if (stockCardTab) stockCardTab.textContent = isStock ? "Stok Kartı" : "Kayıt Kartı";
     document.querySelectorAll('[data-action="new-card"]').forEach(function (button) {
       button.textContent = isStock ? "Yeni Kart" : "Yeni Kayıt";
     });
-    if (!isStock) {
-      setCustomForm(item);
-      return;
-    }
-    $("item-id").value = item ? item.id : generatedItemId();
-    $("item-name").value = item ? item.name : "";
-    $("item-category").value = item ? item.category : "";
-    $("item-footprint").value = item ? item.footprint : "";
-    $("item-box").value = item ? item.box : "";
-    $("item-quantity").value = item ? item.quantity : 0;
-    $("item-unit").value = item && ["adet", "gram", "metre", "litre"].includes(item.unit) ? item.unit : "adet";
-    $("item-critical").value = item ? item.critical : 0;
-    $("item-description").value = item ? item.description : "";
-    syncFootprintField();
-    if (categoryCombo) categoryCombo.refresh();
-    if (footprintCombo) footprintCombo.refresh();
+    setCustomForm(item);
   }
 
   function customFieldInput(column, value) {
     const key = escapeHtml(column.key);
     const label = escapeHtml(column.label);
     const safeValue = escapeHtml(value == null ? "" : value);
-    if (column.key === "approvalStatus") {
-      const options = ["Beklemede", "Onaylandı", "Şartlı Onay", "Red"];
-      return '<label>' + label + '<select class="control" data-custom-field="' + key + '">' +
-        options.map(function (option) {
-          return '<option' + (option === value ? " selected" : "") + '>' + escapeHtml(option) + '</option>';
-        }).join("") + '</select></label>';
+    if (column.fieldType === "select") {
+      return '<label>' + label + '<span class="combo-field">' +
+        '<input class="control" data-custom-field="' + key + '" autocomplete="off" value="' +
+        safeValue + '" placeholder="Seçenek ara">' +
+        '<button class="combo-toggle" type="button" tabindex="-1" data-custom-combo-toggle="' +
+        key + '" aria-label="' + label + ' seçeneklerini aç"></button></span></label>';
     }
-    if (column.key === "description" || column.key === "controlMethod") {
+    if (column.fieldType === "checkbox") {
+      return '<label class="checkbox-form-field"><span>' + label + '</span>' +
+        '<span class="checkbox-value"><input type="checkbox" data-custom-field="' + key + '"' +
+        (checkboxValue(value) ? " checked" : "") + '><span>İşaretli</span></span></label>';
+    }
+    if (column.fieldType === "multiline") {
       return '<label class="form-span">' + label + '<textarea class="control" data-custom-field="' +
         key + '" rows="2">' + safeValue + '</textarea></label>';
     }
-    if (column.numeric) {
+    if (column.fieldType === "number") {
       return '<label>' + label + '<input class="control" data-custom-field="' + key +
-        '" type="number" min="0" step="1" inputmode="numeric" value="' + safeValue + '"></label>';
+        '" type="number" step="' + (column.integer ? "1" : "any") + '" inputmode="decimal" value="' +
+        safeValue + '"></label>';
     }
-    const type = column.key === "checkedAt" ? "date" : "text";
+    const type = column.fieldType === "date" ? "date" : "text";
+    const inputValue = column.fieldType === "date" ? escapeHtml(dateInputValue(value)) : safeValue;
     return '<label>' + label + '<input class="control" data-custom-field="' + key +
-      '" type="' + type + '" autocomplete="off" value="' + safeValue + '"></label>';
+      '" type="' + type + '" autocomplete="off" value="' + inputValue + '"></label>';
+  }
+
+  function closeDynamicFieldCombos() {
+    dynamicFieldCombos.forEach(function (combo) { combo.close(); });
+    dynamicFieldCombos = [];
+  }
+
+  function attachDynamicFieldCombos(columns) {
+    closeDynamicFieldCombos();
+    columns.filter(function (column) {
+      return column.fieldType === "select";
+    }).forEach(function (column) {
+      const input = $("custom-card-fields").querySelector('[data-custom-field="' + column.key + '"]');
+      const toggle = $("custom-card-fields").querySelector('[data-custom-combo-toggle="' + column.key + '"]');
+      if (!input || !toggle) return;
+      dynamicFieldCombos.push(window.DepoCombo.attach(input, toggle, function () {
+        return columnOptionValues(column);
+      }));
+    });
   }
 
   function setCustomForm(item) {
     const active = activeTableReference();
-    if (!active) return;
+    closeDynamicFieldCombos();
+    if (!active) {
+      $("custom-card-fields").innerHTML = "";
+      return;
+    }
     const columns = ensureTableColumns(active.table).filter(function (column) {
-      return column.visible !== false && column.key !== "id" && column.key !== "updatedAt";
+      return column.visible !== false && column.editable !== false;
     });
     $("custom-card-fields").innerHTML = columns.map(function (column) {
       return customFieldInput(column, item ? item[column.key] : defaultValueForColumn(column));
     }).join("");
+    attachDynamicFieldCombos(columns);
   }
 
   function defaultValueForColumn(column) {
-    if (column.key === "approvalStatus") return "Beklemede";
-    if (column.key === "checkedBy") {
-      const user = currentUser();
-      return user ? user.name : "";
-    }
+    if (column.fieldType === "select") return columnOptionValues(column)[0] || "";
+    if (column.fieldType === "checkbox") return false;
+    if (column.key === "checkedBy") return currentOperatorName();
     if (column.key === "checkedAt") return new Date().toISOString().slice(0, 10);
-    return column.numeric ? 0 : "";
+    return column.fieldType === "number" ? 0 : "";
   }
 
   function syncStockForm(force) {
@@ -1241,7 +1358,7 @@
   }
 
   function startNewCard() {
-    if (!requireAdministrator()) return;
+    if (!requireAdministrator(startNewCard)) return;
     const active = activeTableReference();
     if (!active) {
       showToast("Önce bir tablo açın.", true);
@@ -1251,105 +1368,120 @@
     ui.formItemId = "";
     ui.activeItemId = null;
     // Seri kart girişinde mevcut bilgiler korunur; yalnızca yeni ve benzersiz ID hazırlanır.
-    if (stockLikeActiveTable()) $("item-id").value = generatedItemId();
-    else setCustomForm(null);
+    if (!stockLikeActiveTable()) setCustomForm(null);
     setRightTab("stock-card");
     renderStockTable();
-    const first = stockLikeActiveTable()
-      ? $("item-name")
-      : $("custom-card-fields").querySelector("[data-custom-field]");
+    const first = $("custom-card-fields").querySelector("[data-custom-field]");
     if (first) first.focus();
   }
 
   function readStockForm() {
-    if (!stockLikeActiveTable()) return readCustomForm();
-    return {
-      id: $("item-id").value.trim(),
-      name: $("item-name").value.trim(),
-      category: $("item-category").value.trim(),
-      footprint: $("item-footprint").value.trim(),
-      box: $("item-box").value.trim(),
-      quantity: integerValue($("item-quantity"), NaN),
-      unit: $("item-unit").value,
-      critical: integerValue($("item-critical"), NaN),
-      description: $("item-description").value.trim(),
-      updatedAt: nowText()
-    };
+    return readCustomForm();
+  }
+
+  function readColumnInput(input, column) {
+    if (column.fieldType === "checkbox") return input.checked;
+    if (column.fieldType === "number") {
+      if (input.value.trim() === "") return "";
+      return Number(input.value);
+    }
+    return input.value.trim();
   }
 
   function readCustomForm() {
     const active = activeTableReference();
     const item = activeItem();
-    const values = {
-      id: item && ui.formMode !== "new" ? item.id : generatedRecordId(),
-      updatedAt: nowText()
-    };
+    const isExisting = Boolean(item && ui.formMode !== "new");
+    const values = isExisting ? Object.assign({}, item) : {};
+    values.id = isExisting ? item.id : (stockLikeActiveTable() ? generatedItemId() : generatedRecordId());
+    values.updatedAt = nowText();
     ensureTableColumns(active.table).forEach(function (column) {
       if (column.key === "id" || column.key === "updatedAt") return;
       const input = $("custom-card-fields").querySelector('[data-custom-field="' + column.key + '"]');
-      if (!input) return;
-      values[column.key] = column.numeric ? integerValue(input, NaN) : input.value.trim();
+      if (input) values[column.key] = readColumnInput(input, column);
+      else if (!isExisting && !Object.prototype.hasOwnProperty.call(values, column.key)) {
+        values[column.key] = defaultValueForColumn(column);
+      }
     });
     return values;
   }
 
+  function focusCardField(key) {
+    const input = $("custom-card-fields").querySelector('[data-custom-field="' + key + '"]');
+    if (input) input.focus();
+  }
+
+  function editableVisibleColumn(table, key) {
+    return ensureTableColumns(table).find(function (column) {
+      return column.key === key && column.visible !== false && column.editable !== false;
+    }) || null;
+  }
+
   function saveStockCard(event) {
     event.preventDefault();
-    if (!requireAdministrator()) return;
+    if (!requireAdministrator(function () { saveStockCard(event); })) return;
     const active = activeTableReference();
     if (!active) {
       showToast("Önce bir liste açın.", true);
       return;
     }
     const values = readStockForm();
-    if (stockLikeActiveTable() && !values.name) {
+    if (stockLikeActiveTable() && editableVisibleColumn(active.table, "name") && !values.name) {
       showToast("Malzeme adı boş bırakılamaz.", true);
-      $("item-name").focus();
+      focusCardField("name");
       return;
     }
-    if (!stockLikeActiveTable() && !values.materialName) {
-      showToast("Malzeme adı boş bırakılamaz.", true);
-      const input = $("custom-card-fields").querySelector('[data-custom-field="materialName"]');
-      if (input) input.focus();
-      return;
-    }
-    if (stockLikeActiveTable()) {
-      const category = categoryDefinition(values.category);
-      if (!category) {
-      showToast("Geçerli bir kategori seçin.", true);
-      $("item-category").focus();
-      return;
-      }
-    }
-    if (stockLikeActiveTable() && (!Number.isInteger(values.quantity) || values.quantity < 0)) {
+    if (stockLikeActiveTable() && tableHasNumberColumn(active.table, "quantity") &&
+        (!Number.isInteger(values.quantity) || values.quantity < 0)) {
       showToast("Miktar sıfır veya daha büyük bir tam sayı olmalıdır.", true);
-      $("item-quantity").focus();
+      focusCardField("quantity");
       return;
     }
-    if (stockLikeActiveTable() && (!Number.isInteger(values.critical) || values.critical < 0)) {
+    if (stockLikeActiveTable() && tableHasNumberColumn(active.table, "critical") &&
+        (!Number.isInteger(values.critical) || values.critical < 0)) {
       showToast("Kritik seviye sıfır veya daha büyük bir tam sayı olmalıdır.", true);
-      $("item-critical").focus();
+      focusCardField("critical");
       return;
     }
-    if (stockLikeActiveTable() && values.footprint && !allDefinedFootprints().includes(values.footprint)) {
-      showToast("Kılıfı tanımlı seçeneklerden seçin.", true);
-      $("item-footprint").focus();
-      return;
-    }
-    const numericError = ensureTableColumns(active.table).find(function (column) {
-      return column.numeric && !Number.isInteger(values[column.key]);
+    const columns = ensureTableColumns(active.table);
+    const numericError = columns.find(function (column) {
+      if (column.fieldType !== "number" || values[column.key] === "") return false;
+      return !Number.isFinite(values[column.key]) || (column.integer && !Number.isInteger(values[column.key]));
     });
     if (numericError) {
-      showToast(numericError.label + " sıfır veya daha büyük bir tam sayı olmalıdır.", true);
+      showToast(numericError.label + " geçerli bir sayı olmalıdır.", true);
+      focusCardField(numericError.key);
+      return;
+    }
+    let invalidSelect = null;
+    columns.some(function (column) {
+      if (column.fieldType !== "select" || values[column.key] === "" || values[column.key] == null) {
+        return false;
+      }
+      const options = columnOptionValues(column);
+      const selected = options.find(function (option) {
+        return normalizeText(option) === normalizeText(values[column.key]);
+      });
+      if (!selected) {
+        invalidSelect = column;
+        return true;
+      }
+      // Aramayla farklı büyük/küçük harf girilse bile kayıt tek yazım standardında tutulur.
+      values[column.key] = selected;
+      return false;
+    });
+    if (invalidSelect) {
+      showToast(invalidSelect.label + " için tanımlı seçeneklerden birini seçin.", true);
+      focusCardField(invalidSelect.key);
       return;
     }
 
-    if (ui.formMode === "new") {
+    if (ui.formMode === "new" || !activeItem()) {
       active.table.items.push(values);
       ui.activeItemId = values.id;
       ui.formMode = "existing";
       ui.formItemId = values.id;
-      showToast("Yeni stok kartı eklendi.");
+      showToast(stockLikeActiveTable() ? "Yeni stok kartı eklendi." : "Yeni kayıt eklendi.");
     } else {
       const item = activeItem();
       if (!item) {
@@ -1357,14 +1489,14 @@
         return;
       }
       Object.assign(item, values, { id: item.id });
-      showToast("Stok kartı kaydedildi.");
+      showToast(stockLikeActiveTable() ? "Stok kartı kaydedildi." : "Kayıt kaydedildi.");
     }
     saveState();
     renderAll(true);
   }
 
   function deleteSelectedCards() {
-    if (!requireAdministrator()) return;
+    if (!requireAdministrator(deleteSelectedCards)) return;
     const active = activeTableReference();
     if (!active) {
       showToast("Önce bir liste açın.", true);
@@ -1412,21 +1544,17 @@
   }
 
   function syncMovementForm() {
-    const user = currentUser();
     const targets = movementTargetItems();
-    const stockMode = stockLikeActiveTable();
+    const active = activeTableReference();
+    const stockMode = stockLikeActiveTable() && active && tableHasNumberColumn(active.table, "quantity");
     const entryOption = Array.from($("movement-type").options).find(function (option) {
       return option.value === "Giriş";
     });
-    const entryAllowed = currentUserIsAdmin();
     if (entryOption) {
-      entryOption.hidden = !entryAllowed;
-      entryOption.disabled = !entryAllowed;
+      entryOption.hidden = false;
+      entryOption.disabled = false;
     }
-    if (!entryAllowed && $("movement-type").value === "Giriş") {
-      $("movement-type").value = "Çıkış";
-    }
-    $("movement-user").textContent = user ? user.name : "";
+    $("movement-user").textContent = currentOperatorName();
     $("movement-selection").textContent = targets.length
       ? (targets.length === 1 ? itemDisplayName(targets[0]) : targets.length + " malzeme seçili")
       : (stockMode ? "Seçim yok" : "Bu liste stok hareketi kullanmaz");
@@ -1444,19 +1572,13 @@
     const type = $("movement-type").value;
     const purpose = $("movement-purpose").value.trim();
     const note = $("movement-note").value.trim();
-    const user = currentUser();
 
-    if (!stockLikeActiveTable()) {
-      showToast("Bu liste türünde giriş/çıkış işlemi kullanılmaz.", true);
+    if (!stockLikeActiveTable() || !active || !tableHasNumberColumn(active.table, "quantity")) {
+      showToast("Bu listede giriş/çıkış için Miktar sütunu bulunmuyor.", true);
       return;
     }
 
-    if (type === "Giriş" && !currentUserIsAdmin()) {
-      showToast("Üyeler yalnızca stok çıkışı yapabilir.", true);
-      $("movement-type").value = "Çıkış";
-      syncMovementForm();
-      return;
-    }
+    if (type === "Giriş" && !requireAdministrator(function () { processMovement(event); })) return;
     if (!active || !targets.length) {
       showToast("İşlem yapılacak malzemeyi seçin.", true);
       return;
@@ -1492,7 +1614,7 @@
         type: type,
         quantity: quantity,
         purpose: type === "Çıkış" ? purpose : "",
-        user: user ? user.name : "",
+        user: currentOperatorName(),
         note: note,
         before: before,
         after: after
@@ -1508,31 +1630,22 @@
 
   function applyPermissionView() {
     const active = activeTableReference();
-    const isAdministrator = currentUserIsAdmin();
-    const mayManage = Boolean(active && isAdministrator);
-    const stockMode = stockLikeActiveTable();
+    const stockMode = stockLikeActiveTable() && active && tableHasNumberColumn(active.table, "quantity");
     const stockTab = document.querySelector('[data-right-tab="stock-card"]');
     const movementTab = document.querySelector('[data-right-tab="movement"]');
-    const usersTab = document.querySelector('[data-left-tab="users"]');
-    const usersMenuItem = document.querySelector('[data-action="show-panel-users"]');
-    if (stockTab) stockTab.hidden = !isAdministrator;
+    if (stockTab) stockTab.hidden = false;
     if (movementTab) movementTab.hidden = !stockMode;
-    if (usersTab) usersTab.hidden = !isAdministrator;
-    if (usersMenuItem) usersMenuItem.hidden = !isAdministrator;
-    if (window.DepoDock) window.DepoDock.setPanelAllowed("stock-card", isAdministrator);
-    if (window.DepoDock) window.DepoDock.setPanelAllowed("users", isAdministrator);
-    if (!isAdministrator && ui.leftTab === "users") setLeftTab("lists");
-    if (!mayManage && ui.rightTab === "stock-card" && stockMode) setRightTab("movement");
-    if (!stockMode && ui.rightTab === "movement" && isAdministrator) setRightTab("stock-card");
+    if (window.DepoDock) window.DepoDock.setPanelAllowed("stock-card", true);
+    if (!stockMode && ui.rightTab === "movement") setRightTab("stock-card");
     document.querySelectorAll('[data-action="new-card"], [data-action="delete-card"]').forEach(function (button) {
-      button.disabled = !mayManage;
+      button.disabled = !active;
     });
     const newTableButton = $("new-table-button");
-    if (newTableButton) newTableButton.disabled = !isAdministrator;
+    if (newTableButton) newTableButton.disabled = false;
     const importButton = document.querySelector('[data-action="import-json"]');
-    if (importButton) importButton.hidden = !isAdministrator;
+    if (importButton) importButton.hidden = false;
     const definitionsButton = document.querySelector('[data-action="open-definitions"]');
-    if (definitionsButton) definitionsButton.hidden = !isAdministrator;
+    if (definitionsButton) definitionsButton.hidden = false;
   }
 
   // ---------------------------------------------------------------------------
@@ -1683,7 +1796,7 @@
   }
 
   function createTable() {
-    if (!requireAdministrator()) return;
+    if (!requireAdministrator(createTable)) return;
     openFormModal({
       title: "Yeni liste",
       fields: [
@@ -1724,7 +1837,9 @@
   }
 
   function openTableContextMenu(tableId, clientX, clientY) {
-    if (!requireAdministrator()) return;
+    if (!requireAdministrator(function () {
+      openTableContextMenu(tableId, clientX, clientY);
+    })) return;
     const menu = $("table-context-menu");
     closeMenus();
     ui.contextTableId = tableId;
@@ -1737,7 +1852,7 @@
   }
 
   function renameTable(tableId) {
-    if (!requireAdministrator()) return;
+    if (!requireAdministrator(function () { renameTable(tableId); })) return;
     const table = tableById(tableId);
     if (!table) return;
     openFormModal({
@@ -1763,7 +1878,7 @@
   }
 
   function confirmDeleteTable(tableId) {
-    if (!requireAdministrator()) return;
+    if (!requireAdministrator(function () { confirmDeleteTable(tableId); })) return;
     const table = tableById(tableId);
     if (!table) return;
     openFormModal({
@@ -1788,272 +1903,21 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Kategori ve kılıf tanımları
+  // Liste ve sütun tanımları
   // ---------------------------------------------------------------------------
 
-  function categoryUsageCount(name) {
-    const key = window.DepoCatalog.normalizeText(name);
-    return state.tables.reduce(function (total, table) {
-      return total + table.items.filter(function (item) {
-        return window.DepoCatalog.normalizeText(item.category) === key;
-      }).length;
-    }, 0);
-  }
-
-  function selectedDefinition() {
-    return categoryDefinitions().find(function (category) {
-      return category.id === ui.definitionCategoryId;
-    }) || null;
-  }
-
-  function showDefinitionError(message) {
-    $("definition-error").textContent = message;
-    $("definition-error").hidden = !message;
-  }
-
-  function setDefinitionView(view) {
-    ui.definitionView = ["categories", "footprints", "columns"].includes(view) ? view : "categories";
-    const categoryView = ui.definitionView === "categories";
-    const footprintView = ui.definitionView === "footprints";
-    const columnsView = ui.definitionView === "columns";
-    $("definitions-category-pane").hidden = !categoryView;
-    $("definitions-footprint-pane").hidden = !footprintView;
-    $("definitions-columns-pane").hidden = !columnsView;
-    $("definitions-category-tab").classList.toggle("is-active", categoryView);
-    $("definitions-footprint-tab").classList.toggle("is-active", footprintView);
-    $("definitions-columns-tab").classList.toggle("is-active", columnsView);
-    if (footprintView) renderGlobalFootprintList();
-    if (columnsView) {
-      const firstColumn = definitionColumns()[0];
-      if (!selectedDefinitionColumn()) loadDefinitionColumnEditor(firstColumn ? firstColumn.key : "");
-      else renderDefinitionColumnList();
-    }
-  }
-
-  function renderDefinitionTabCounts() {
-    $("definitions-category-tab").textContent = "Kategoriler (" + categoryDefinitions().length + ")";
-    $("definitions-footprint-tab").textContent = "Kılıflar (" + allDefinedFootprints().length + ")";
-    $("definitions-columns-tab").textContent = "Sütunlar (" + definitionColumns().length + ")";
-  }
-
-  function renderDefinitionCategoryList() {
-    const query = normalizeText($("definition-search").value);
-    $("definition-category-list").innerHTML = categoryDefinitions().filter(function (category) {
-      return !query || normalizeText(category.name).includes(query);
-    }).map(function (category) {
-      return '<button type="button" class="definition-category-button' +
-        (category.id === ui.definitionCategoryId ? " is-active" : "") +
-        '" data-definition-category="' + escapeHtml(category.id) + '">' +
-        '<span>' + escapeHtml(category.name) + '</span><small>' +
-        categoryUsageCount(category.name) + "</small></button>";
-    }).join("");
-  }
-
-  function loadDefinitionEditor(categoryId) {
-    const category = categoryDefinitions().find(function (entry) {
-      return entry.id === categoryId;
-    }) || null;
-    ui.definitionCategoryId = category ? category.id : "";
-    $("definition-id").value = category ? category.id : "";
-    $("definition-name").value = category ? category.name : "";
-    $("delete-definition").hidden = !category;
-    showDefinitionError("");
-    renderDefinitionCategoryList();
-    window.setTimeout(function () { $("definition-name").focus(); }, 0);
-  }
-
   function openDefinitions() {
-    if (!requireAdministrator()) return;
-    state.definitions = window.DepoCatalog.normalizeDefinitions(state.definitions, state.tables);
+    if (!requireAdministrator(openDefinitions)) return;
     $("definitions-modal").hidden = false;
-    $("definition-search").value = "";
-    $("global-footprint-search").value = "";
     $("definition-column-search").value = "";
     ui.definitionTableId = state.session.activeTableId || (state.tables[0] || {}).id || "";
-    const first = categoryDefinitions()[0];
-    renderDefinitionTabCounts();
-    loadDefinitionEditor(first ? first.id : "");
-    const firstFootprint = allDefinedFootprints()[0] || "";
-    loadGlobalFootprintEditor(firstFootprint);
     const firstColumn = definitionColumns()[0];
     loadDefinitionColumnEditor(firstColumn ? firstColumn.key : "");
-    setDefinitionView("categories");
   }
 
   function closeDefinitions() {
     $("definitions-modal").hidden = true;
-    ui.definitionCategoryId = "";
-    ui.definitionFootprint = "";
     ui.definitionColumnKey = "";
-  }
-
-  function saveDefinition(event) {
-    event.preventDefault();
-    if (!requireAdministrator()) return;
-    const id = $("definition-id").value;
-    const name = $("definition-name").value.trim();
-    const current = selectedDefinition();
-
-    if (!name) {
-      showDefinitionError("Kategori adı zorunludur.");
-      return;
-    }
-    const duplicate = categoryDefinitions().some(function (category) {
-      return category.id !== id && normalizeText(category.name) === normalizeText(name);
-    });
-    if (duplicate) {
-      showDefinitionError("Bu isimde bir kategori zaten var.");
-      return;
-    }
-
-    const definition = {
-      id: id || uid("category"),
-      name: name
-    };
-
-    if (current) {
-      if (current.name !== name) {
-        state.tables.forEach(function (table) {
-          table.items.forEach(function (item) {
-            if (normalizeText(item.category) === normalizeText(current.name)) item.category = name;
-          });
-        });
-      }
-      Object.assign(current, definition);
-    } else {
-      state.definitions.categories.push(definition);
-    }
-
-    state.definitions = window.DepoCatalog.normalizeDefinitions(state.definitions, state.tables);
-    saveState();
-    renderAll(true);
-    renderDefinitionTabCounts();
-    loadDefinitionEditor(definition.id);
-    showToast("Kategori tanımı kaydedildi.");
-  }
-
-  function deleteDefinition() {
-    if (!requireAdministrator()) return;
-    const category = selectedDefinition();
-    if (!category) return;
-    const usage = categoryUsageCount(category.name);
-    if (usage) {
-      showDefinitionError("Bu kategori " + usage + " stok kartında kullanılıyor. Önce kartları başka kategoriye taşıyın.");
-      return;
-    }
-    state.definitions.categories = categoryDefinitions().filter(function (entry) {
-      return entry.id !== category.id;
-    });
-    saveState();
-    renderDefinitionTabCounts();
-    const first = categoryDefinitions()[0];
-    loadDefinitionEditor(first ? first.id : "");
-    renderAll(false);
-    showToast("Kategori tanımı silindi.");
-  }
-
-  function footprintUsageCount(name) {
-    const key = normalizeText(name);
-    return state.tables.reduce(function (total, table) {
-      return total + table.items.filter(function (item) {
-        return normalizeText(item.footprint) === key;
-      }).length;
-    }, 0);
-  }
-
-  function showGlobalFootprintError(message) {
-    $("global-footprint-error").textContent = message;
-    $("global-footprint-error").hidden = !message;
-  }
-
-  function renderGlobalFootprintList() {
-    const query = normalizeText($("global-footprint-search").value);
-    const footprints = allDefinedFootprints().filter(function (footprint) {
-      return !query || normalizeText(footprint).includes(query);
-    });
-    $("global-footprint-list").innerHTML = footprints.length
-      ? footprints.map(function (footprint) {
-        return '<button type="button" class="definition-category-button' +
-          (normalizeText(footprint) === normalizeText(ui.definitionFootprint) ? " is-active" : "") +
-          '" data-global-footprint="' + escapeHtml(footprint) + '"><span>' +
-          escapeHtml(footprint) + '</span><small>' + footprintUsageCount(footprint) + "</small></button>";
-      }).join("")
-      : '<div class="combo-empty">Tanımlı kılıf yok</div>';
-  }
-
-  function loadGlobalFootprintEditor(footprint) {
-    const existing = allDefinedFootprints().find(function (entry) {
-      return normalizeText(entry) === normalizeText(footprint);
-    }) || "";
-    ui.definitionFootprint = existing;
-    $("global-footprint-original").value = existing;
-    $("global-footprint-name").value = existing;
-    $("global-footprint-usage").textContent = existing ? footprintUsageCount(existing) : "0";
-    $("delete-global-footprint").hidden = !existing;
-    showGlobalFootprintError("");
-    renderGlobalFootprintList();
-    window.setTimeout(function () { $("global-footprint-name").focus(); }, 0);
-  }
-
-  function saveGlobalFootprint(event) {
-    event.preventDefault();
-    if (!requireAdministrator()) return;
-    const original = $("global-footprint-original").value.trim();
-    const name = $("global-footprint-name").value.trim();
-    if (!name) {
-      showGlobalFootprintError("Kılıf adı zorunludur.");
-      return;
-    }
-    const duplicate = allDefinedFootprints().some(function (footprint) {
-      return normalizeText(footprint) === normalizeText(name) &&
-        normalizeText(footprint) !== normalizeText(original);
-    });
-    if (duplicate) {
-      showGlobalFootprintError("Bu isimde bir kılıf zaten var.");
-      return;
-    }
-
-    const definitions = state.definitions;
-    if (original && normalizeText(original) !== normalizeText(name)) {
-      state.tables.forEach(function (table) {
-        table.items.forEach(function (item) {
-          if (normalizeText(item.footprint) === normalizeText(original)) item.footprint = name;
-        });
-      });
-      definitions.footprints = (definitions.footprints || []).filter(function (footprint) {
-        return normalizeText(footprint) !== normalizeText(original);
-      });
-    }
-    definitions.footprints = window.DepoCatalog.uniqueSorted(
-      (definitions.footprints || []).concat(name)
-    );
-    state.definitions = window.DepoCatalog.normalizeDefinitions(definitions, state.tables);
-    saveState();
-    renderAll(true);
-    renderDefinitionTabCounts();
-    loadGlobalFootprintEditor(name);
-    showToast(original ? "Kılıf tanımı güncellendi." : "Yeni kılıf eklendi.");
-  }
-
-  function deleteGlobalFootprint() {
-    if (!requireAdministrator()) return;
-    const footprint = ui.definitionFootprint;
-    if (!footprint) return;
-    const usage = footprintUsageCount(footprint);
-    if (usage) {
-      showGlobalFootprintError("Bu kılıf " + usage + " stok kartında kullanılıyor. Önce kartlardaki kılıfı değiştirin.");
-      return;
-    }
-    state.definitions.footprints = (state.definitions.footprints || []).filter(function (entry) {
-      return normalizeText(entry) !== normalizeText(footprint);
-    });
-    state.definitions = window.DepoCatalog.normalizeDefinitions(state.definitions, state.tables);
-    saveState();
-    renderDefinitionTabCounts();
-    const first = allDefinedFootprints()[0] || "";
-    loadGlobalFootprintEditor(first);
-    renderAll(false);
-    showToast("Kılıf tanımı silindi.");
   }
 
   // ---------------------------------------------------------------------------
@@ -2071,7 +1935,7 @@
   }
 
   function importJsonFile(file) {
-    if (!requireAdministrator()) return;
+    if (!requireAdministrator(function () { importJsonFile(file); })) return;
     const reader = new FileReader();
     reader.onload = function () {
       try {
@@ -2082,19 +1946,10 @@
           submitLabel: "İçe Aktar",
           submitStyle: "danger",
           onSubmit: async function () {
-            const signedInUser = currentUser();
+            const operatorName = currentOperatorName();
             state = await window.DepoStore.replace(imported);
-            if (signedInUser) {
-              let importedUser = state.users.find(function (user) {
-                return normalizeText(user.username) === normalizeText(signedInUser.username);
-              });
-              if (!importedUser) {
-                importedUser = window.DepoStore.clone(signedInUser);
-                state.users.push(importedUser);
-              }
-              state.session.currentUserId = importedUser.id;
-              saveState();
-            }
+            state.session.operatorName = operatorName;
+            saveState();
             ui.activeItemId = null;
             ui.checkedIds.clear();
             ui.formItemId = null;
@@ -2130,7 +1985,7 @@
     ];
     active.table.items.forEach(function (item) {
       lines.push(columns.map(function (column) {
-        return csvCell(item[column.key]);
+        return csvCell(tableCellText(column, item[column.key]));
       }).join(";"));
     });
     downloadFile(
@@ -2146,7 +2001,8 @@
   // ---------------------------------------------------------------------------
 
   function openBom() {
-    if (!activeTableReference() || !stockLikeActiveTable()) {
+    const active = activeTableReference();
+    if (!active || !stockLikeActiveTable() || !tableHasNumberColumn(active.table, "quantity")) {
       showToast("BOM için önce bir stok tablosu açın.", true);
       return;
     }
@@ -2309,7 +2165,6 @@
       showToast("Bazı BOM satırları için stok yetersiz.", true);
       return;
     }
-    const user = currentUser();
     selectedRows.forEach(function (row) {
       const item = active.table.items.find(function (entry) { return entry.id === row.matchId; });
       const before = Number(item.quantity);
@@ -2324,7 +2179,7 @@
         type: "Çıkış",
         quantity: row.quantity,
         purpose: purpose,
-        user: user ? user.name : "",
+        user: currentOperatorName(),
         note: note || "BOM List",
         before: before,
         after: item.quantity
@@ -2448,14 +2303,16 @@
   function handleAction(action) {
     const actions = {
       "import-json": function () {
-        if (requireAdministrator()) $("json-file-input").click();
+        if (requireAdministrator(function () { $("json-file-input").click(); })) {
+          $("json-file-input").click();
+        }
       },
       "export-json": exportJson,
       "export-csv": exportActiveTableCsv,
       "open-bom": openBom,
-      "edit-account": editCurrentAccount,
-      "change-password": changeCurrentPassword,
-      "sign-out": signOut,
+      "edit-operator": editOperatorName,
+      "enter-admin": function () { openAdministratorPrompt(); },
+      "exit-admin": function () { exitAdministratorMode(true); },
       "new-card": startNewCard,
       "delete-card": deleteSelectedCards,
       "clear-selection": function () {
@@ -2466,10 +2323,6 @@
       },
       "open-definitions": openDefinitions,
       "close-definitions": closeDefinitions,
-      "new-definition": function () { loadDefinitionEditor(""); },
-      "delete-definition": deleteDefinition,
-      "new-global-footprint": function () { loadGlobalFootprintEditor(""); },
-      "delete-global-footprint": deleteGlobalFootprint,
       "new-definition-column": function () { loadDefinitionColumnEditor(""); },
       "delete-definition-column": deleteDefinitionColumn,
       "refresh": function () {
@@ -2496,12 +2349,9 @@
         $("columns-modal").hidden = false;
       },
       "show-panel-lists": function () { window.DepoDock.togglePanel("lists"); },
-      "show-panel-users": function () {
-        if (currentUserIsAdmin()) window.DepoDock.togglePanel("users");
-      },
       "show-panel-stock": function () { window.DepoDock.togglePanel("stock"); },
       "show-panel-stock-card": function () {
-        if (currentUserIsAdmin()) window.DepoDock.togglePanel("stock-card");
+        window.DepoDock.togglePanel("stock-card");
       },
       "show-panel-movement": function () { window.DepoDock.togglePanel("movement"); },
       "show-panel-history": function () { window.DepoDock.togglePanel("history"); },
@@ -2516,7 +2366,7 @@
         if (window.DepoDock) window.DepoDock.reset();
       },
       "show-about": function () {
-        window.alert("Ar-Ge Numune Depo\n\nKullanıcılar, listeler ve hareketler Firebase ortak verisinde tutulur.");
+        window.alert("Ar-Ge Numune Depo\n\nListeler ve hareketler Firebase ortak verisinde tutulur. Normal erişim anonimdir; yönetici işlemleri ortak parola ile geçici olarak açılır.");
       },
       "rename-table": function () {
         const tableId = ui.contextTableId;
@@ -2529,8 +2379,12 @@
       "close-form-modal": closeFormModal,
       "close-columns": function () { $("columns-modal").hidden = true; },
       "reset-columns": function () {
+        if (!requireAdministrator(function () { handleAction("reset-columns"); })) return;
         const active = activeTableReference();
-        if (active) active.table.columns = defaultColumnsForKind(tableKind(active.table));
+        if (active) {
+          active.table.deletedColumnKeys = [];
+          active.table.columns = defaultColumnsForKind(tableKind(active.table));
+        }
         state.settings.visibleColumns = window.DepoData.stockColumnDefinitions.map(function (column) { return column.key; });
         state.settings.columnOrder = state.settings.visibleColumns.slice();
         state.settings.columnWidths = Object.assign({}, defaultColumnWidths);
@@ -2566,27 +2420,16 @@
     }
   });
 
-  document.querySelectorAll("[data-auth-mode]").forEach(function (button) {
-    button.addEventListener("click", function () {
-      setAuthMode(button.dataset.authMode);
-    });
-  });
-  $("auth-form").addEventListener("submit", handleAuthSubmit);
-  $("show-password").addEventListener("change", function () {
-    $("auth-password").type = this.checked ? "text" : "password";
+  $("connection-retry").addEventListener("click", function () {
+    window.location.reload();
   });
   $("json-file-button").addEventListener("click", function () {
     showToast("Veriler Firebase Realtime Database ile ortak kullanılıyor.");
   });
   document.querySelectorAll("[data-left-tab]").forEach(function (button) {
     button.addEventListener("click", function () {
-      if (button.dataset.leftTab === "users" && !currentUserIsAdmin()) return;
       setLeftTab(button.dataset.leftTab);
     });
-  });
-  $("user-list").addEventListener("change", function (event) {
-    const select = event.target.closest("[data-user-role-id]");
-    if (select) changeUserRole(select.dataset.userRoleId, select.value);
   });
 
   document.querySelectorAll("[data-right-tab]").forEach(function (button) {
@@ -2709,9 +2552,6 @@
   });
 
   $("stock-card-panel").addEventListener("submit", saveStockCard);
-  $("item-category").addEventListener("change", function () {
-    syncFootprintField();
-  });
   $("movement-panel").addEventListener("submit", processMovement);
   $("movement-type").addEventListener("change", syncMovementForm);
   $("history-scope").addEventListener("change", renderHistory);
@@ -2756,29 +2596,15 @@
     updateColumnVisibility(checkbox.dataset.columnKey, checkbox.checked);
   });
 
-  $("definition-form").addEventListener("submit", saveDefinition);
-  $("definition-search").addEventListener("input", renderDefinitionCategoryList);
-  $("definition-category-list").addEventListener("click", function (event) {
-    const button = event.target.closest("[data-definition-category]");
-    if (button) loadDefinitionEditor(button.dataset.definitionCategory);
-  });
-  document.querySelector(".definitions-tabs").addEventListener("click", function (event) {
-    const tab = event.target.closest("[data-definition-view]");
-    if (tab) setDefinitionView(tab.dataset.definitionView);
-  });
-  $("global-footprint-form").addEventListener("submit", saveGlobalFootprint);
-  $("global-footprint-search").addEventListener("input", renderGlobalFootprintList);
-  $("global-footprint-list").addEventListener("click", function (event) {
-    const button = event.target.closest("[data-global-footprint]");
-    if (button) loadGlobalFootprintEditor(button.dataset.globalFootprint);
-  });
   $("definition-column-form").addEventListener("submit", saveDefinitionColumn);
+  $("definition-column-type").addEventListener("change", function () {
+    syncDefinitionColumnTypeFields();
+  });
   $("definition-column-search").addEventListener("input", renderDefinitionColumnList);
   $("definition-column-table").addEventListener("change", function () {
     ui.definitionTableId = $("definition-column-table").value;
     ui.definitionColumnKey = "";
     const firstColumn = definitionColumns()[0];
-    renderDefinitionTabCounts();
     loadDefinitionColumnEditor(firstColumn ? firstColumn.key : "");
   });
   $("definition-column-list").addEventListener("click", function (event) {
@@ -2847,17 +2673,6 @@
     showToast(event.detail || "Firebase ortak verisine yazılamadı.", true);
   });
 
-  categoryCombo = window.DepoCombo.attach(
-    $("item-category"),
-    $("item-category-toggle"),
-    categoryComboOptions
-  );
-  footprintCombo = window.DepoCombo.attach(
-    $("item-footprint"),
-    $("item-footprint-toggle"),
-    footprintComboOptions
-  );
-
   showAuthLoading();
   window.DepoDock.initialize();
 
@@ -2867,16 +2682,13 @@
     ensureValidSession();
     applySettings();
     updateFileStatus();
-    setAuthMode("login");
     $("auth-json-status").textContent = "Firebase ortak veri";
-    if (state.session.currentUserId) {
-      openApplication();
-    } else {
-      showAuthControls();
-    }
+    hideAuthLoading();
+    openApplication();
+    window.setInterval(checkAdministratorExpiration, 15000);
   } catch (error) {
     $("auth-json-status").textContent = "Firebase bağlantı hatası";
-    showAuthControls();
+    hideAuthLoading();
     showAuthError(friendlyErrorMessage(error, "Firebase başlatılamadı."));
   }
 }());

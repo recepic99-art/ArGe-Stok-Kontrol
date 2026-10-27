@@ -2,62 +2,76 @@
   "use strict";
 
   const stockColumnDefinitions = [
-    { key: "id", label: "ID" },
-    { key: "name", label: "Malzeme Adı" },
-    { key: "category", label: "Cins/Kategori" },
-    { key: "footprint", label: "Kılıf" },
-    { key: "box", label: "Kutu" },
-    { key: "quantity", label: "Miktar", numeric: true },
-    { key: "unit", label: "Birim" },
-    { key: "critical", label: "Kritik Seviye", numeric: true },
-    { key: "description", label: "Açıklama" },
-    { key: "updatedAt", label: "Son Güncelleme" }
+    { key: "id", label: "ID", fieldType: "text", editable: false },
+    { key: "name", label: "Malzeme Adı", fieldType: "text" },
+    { key: "category", label: "Cins/Kategori", fieldType: "select" },
+    { key: "footprint", label: "Kılıf", fieldType: "select" },
+    { key: "box", label: "Kutu", fieldType: "text" },
+    { key: "quantity", label: "Miktar", fieldType: "number", integer: true, numeric: true },
+    {
+      key: "unit",
+      label: "Birim",
+      fieldType: "select",
+      options: ["adet", "gram", "metre", "litre"]
+    },
+    { key: "critical", label: "Kritik Seviye", fieldType: "number", integer: true, numeric: true },
+    { key: "description", label: "Açıklama", fieldType: "multiline" },
+    { key: "updatedAt", label: "Son Güncelleme", fieldType: "text", editable: false }
   ];
 
   const qualityColumnDefinitions = [
-    { key: "materialName", label: "Malzeme Adı" },
-    { key: "supplier", label: "Geldiği Yer" },
-    { key: "incomingQuantity", label: "Gelen Adet", numeric: true },
-    { key: "sampleQuantity", label: "Numune Adedi", numeric: true },
-    { key: "controlMethod", label: "Kontrol Yöntemi" },
-    { key: "approvalStatus", label: "Onay Durumu" },
-    { key: "checkedBy", label: "Kontrol Eden" },
-    { key: "checkedAt", label: "Kontrol Tarihi" },
-    { key: "description", label: "Açıklama" },
-    { key: "updatedAt", label: "Son Güncelleme" }
+    { key: "materialName", label: "Malzeme Adı", fieldType: "text" },
+    { key: "supplier", label: "Geldiği Yer", fieldType: "text" },
+    { key: "incomingQuantity", label: "Gelen Adet", fieldType: "number", integer: true, numeric: true },
+    { key: "sampleQuantity", label: "Numune Adedi", fieldType: "number", integer: true, numeric: true },
+    { key: "controlMethod", label: "Kontrol Yöntemi", fieldType: "multiline" },
+    {
+      key: "approvalStatus",
+      label: "Onay Durumu",
+      fieldType: "select",
+      options: ["Beklemede", "Onaylandı", "Şartlı Onay", "Red"]
+    },
+    { key: "checkedBy", label: "Kontrol Eden", fieldType: "text" },
+    { key: "checkedAt", label: "Kontrol Tarihi", fieldType: "date" },
+    { key: "description", label: "Açıklama", fieldType: "multiline" },
+    { key: "updatedAt", label: "Son Güncelleme", fieldType: "text", editable: false }
   ];
 
-  const columnDefinitions = stockColumnDefinitions.concat(
-    qualityColumnDefinitions.filter(function (column) {
-      return !stockColumnDefinitions.some(function (stockColumn) {
-        return stockColumn.key === column.key;
-      });
-    })
-  );
+  function migrateLegacyState(state) {
+    const migrated = window.DepoCatalog.migrateLegacyState(state, {
+      stock: stockColumnDefinitions,
+      quality: qualityColumnDefinitions
+    });
+    migrated.schemaVersion = 11;
+    migrated.session = migrated.session || {};
+    delete migrated.users;
+    delete migrated.session.currentUserId;
+    if (typeof migrated.session.operatorName !== "string") {
+      migrated.session.operatorName = "";
+    }
+    return migrated;
+  }
 
-  // Yeni bir JSON dosyası oluşturulduğunda yalnızca gerçek kullanıcı ve boş ana liste gelir.
+  // Yeni bir kurulumda üyelik hesabı oluşturulmaz. Firebase kimliği arka planda
+  // anonim açılır; operatör adı yalnızca hareket kaydında görünmek için yerelde tutulur.
   function createInitialState() {
     if (window.DepoSeedState) {
       const seed = JSON.parse(JSON.stringify(window.DepoSeedState));
-      seed.definitions = window.DepoCatalog.normalizeDefinitions(seed.definitions, seed.tables);
-      return seed;
+      return migrateLegacyState(seed);
     }
 
-    const columns = columnDefinitions.map(function (column) {
+    const columns = stockColumnDefinitions.map(function (column) {
       return column.key;
     });
 
     const initialState = {
-      schemaVersion: 7,
-      users: [
-        { id: "u-recep", username: "recep", name: "Recep İç", role: "admin" }
-      ],
+      schemaVersion: 11,
       tables: [
-        { id: "t-main", name: "Numune Malzemeler Listesi", items: [] }
+        { id: "t-main", name: "Numune Malzemeler Listesi", kind: "stock", items: [] }
       ],
       logs: [],
       session: {
-        currentUserId: null,
+        operatorName: "",
         activeTableId: "t-main",
         openTableIds: ["t-main"]
       },
@@ -95,14 +109,13 @@
         }
       }
     };
-    initialState.definitions = window.DepoCatalog.normalizeDefinitions(null, initialState.tables);
-    return initialState;
+    return migrateLegacyState(initialState);
   }
 
   window.DepoData = {
-    columnDefinitions: columnDefinitions,
     stockColumnDefinitions: stockColumnDefinitions,
     qualityColumnDefinitions: qualityColumnDefinitions,
+    migrateLegacyState: migrateLegacyState,
     createInitialState: createInitialState
   };
 }());

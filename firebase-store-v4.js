@@ -1,21 +1,21 @@
 (function () {
   "use strict";
 
-  // Firebase ortak veri katmanı - v9.
+  // Firebase ortak veri katmanı - v11.
   const LOCAL_UI_KEY = "arge-numune-depo-ui-v1";
+  const ADMIN_SESSION_KEY = "arge-numune-depo-admin-session-v1";
   const CLOUD_PATH = "appState";
-  const SCHEMA_VERSION = 7;
+  const SCHEMA_VERSION = 11;
 
   let database = null;
   let auth = null;
   let cloudReference = null;
-  let usersReference = null;
-  let rolesReference = null;
   let stopWatching = null;
   let lastCloudInventory = null;
   let watchCallback = null;
   let pendingWriteCount = 0;
   let writeQueue = Promise.resolve();
+  let memoryAdministratorExpiry = 0;
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -39,28 +39,68 @@
         // Firebase boş dizileri saklamaz. Yeni ve henüz boş bir liste buluttan
         // `items` alanı olmadan dönebileceği için burada tekrar boş dizi veririz.
         normalized.items = toArray(table.items);
+        if (Object.prototype.hasOwnProperty.call(table, "columns")) {
+          normalized.columns = toArray(table.columns);
+        }
+        if (Object.prototype.hasOwnProperty.call(table, "deletedColumnKeys")) {
+          normalized.deletedColumnKeys = toArray(table.deletedColumnKeys).map(String);
+        }
         return normalized;
       });
   }
 
-  function normalizeUsername(value) {
-    return String(value || "")
-      .toLocaleLowerCase("tr-TR")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/ı/g, "i")
-      .replace(/[^a-z0-9]/g, "");
+  function accessConfig() {
+    return window.DepoAccessConfig || {};
   }
 
-  // Firebase Authentication e-posta bekler. Kullanıcı yine yalnızca kullanıcı adı görür.
-  function usernameEmail(username) {
-    return normalizeUsername(username) + "@argestokkontrol.app";
+  function administratorEmail() {
+    return String(accessConfig().administratorEmail || "").trim().toLocaleLowerCase("tr-TR");
+  }
+
+  function administratorDurationMs() {
+    const minutes = Number(accessConfig().administratorMinutes || 15);
+    return Math.max(1, minutes) * 60 * 1000;
+  }
+
+  function isAdministratorIdentity(user) {
+    return Boolean(
+      user &&
+      !user.isAnonymous &&
+      administratorEmail() &&
+      String(user.email || "").toLocaleLowerCase("tr-TR") === administratorEmail()
+    );
+  }
+
+  function administratorExpiresAt() {
+    const stored = window.sessionStorage
+      ? window.sessionStorage.getItem(ADMIN_SESSION_KEY)
+      : memoryAdministratorExpiry;
+    const value = Number(stored);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function clearAdministratorSession() {
+    memoryAdministratorExpiry = 0;
+    if (window.sessionStorage) window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  }
+
+  function touchAdministratorSession() {
+    if (!isAdministratorIdentity(auth && auth.currentUser)) return false;
+    memoryAdministratorExpiry = Date.now() + administratorDurationMs();
+    if (window.sessionStorage) {
+      window.sessionStorage.setItem(ADMIN_SESSION_KEY, String(memoryAdministratorExpiry));
+    }
+    return true;
+  }
+
+  function isAdministrator() {
+    return isAdministratorIdentity(auth && auth.currentUser) &&
+      administratorExpiresAt() > Date.now();
   }
 
   function isValidState(value) {
     return Boolean(
       value &&
-      Array.isArray(value.users) &&
       Array.isArray(value.tables) &&
       Array.isArray(value.logs)
     );
@@ -93,29 +133,30 @@
     const defaults = window.DepoData.createInitialState();
     const localUi = readLocalUi();
     const normalized = clone(value);
+    const legacyUsers = toArray(normalized.users);
+    const legacyCurrentUserId = (localUi.session || {}).currentUserId ||
+      (normalized.session || {}).currentUserId;
+    const legacyCurrentUser = legacyUsers.find(function (user) {
+      return user && user.id === legacyCurrentUserId;
+    });
 
     normalized.schemaVersion = SCHEMA_VERSION;
-    normalized.users = toArray(normalized.users).map(function (user) {
-      return {
-        id: user.id,
-        authUid: user.authUid || "",
-        username: user.username,
-        name: user.name,
-        role: user.role === "admin" ? "admin" : "member"
-      };
-    });
+    delete normalized.users;
     normalized.tables = normalizeTables(normalized.tables);
     normalized.logs = toArray(normalized.logs);
-    normalized.definitions = window.DepoCatalog.normalizeDefinitions(
-      normalized.definitions,
-      normalized.tables
-    );
+    window.DepoData.migrateLegacyState(normalized);
     normalized.session = Object.assign(
       {},
       defaults.session,
-      localUi.session || {},
-      normalized.session || {}
+      normalized.session || {},
+      localUi.session || {}
     );
+    delete normalized.session.currentUserId;
+    normalized.session.operatorName = String(
+      normalized.session.operatorName ||
+      (legacyCurrentUser && legacyCurrentUser.name) ||
+      ""
+    ).trim();
     normalized.settings = Object.assign(
       {},
       defaults.settings,
@@ -138,63 +179,13 @@
     return normalized;
   }
 
-  // Kullanıcı profili ile yetki ayrı tutulur. Yetkinin iki yerde saklanması,
-  // eski tarayıcıların güncel rolü yanlışlıkla ezmesine neden oluyordu.
-  function userRecord(user) {
-    return {
-      id: user.id,
-      authUid: user.authUid,
-      username: user.username,
-      name: user.name
-    };
-  }
-
-  function usersFromCloud(cloudState) {
-    const users = [];
-    const directory = cloudState.userDirectory || {};
-    const roles = cloudState.rolesByUid || {};
-
-    function mergeUser(record) {
-      if (!record || !record.authUid) return;
-      const existing = users.find(function (user) {
-        return user.authUid === record.authUid;
-      });
-
-      if (existing) {
-        Object.assign(existing, record);
-      } else {
-        users.push(record);
-      }
-    }
-
-    // Yeni yapıda UID anahtarlı kullanıcı dizini tek gerçek kaynaktır.
-    Object.keys(directory).forEach(function (uid) {
-      mergeUser(Object.assign({}, directory[uid], { authUid: uid }));
-    });
-
-    // Eski JSON'dan yalnızca gerçek Firebase UID'si bulunan kayıtları alırız.
-    // UID'siz başlangıç kullanıcısı artık yönetici hesabı sayılmaz.
-    toArray(cloudState.users).forEach(function (user) {
-      mergeUser(clone(user));
-    });
-
-    users.forEach(function (user) {
-      user.role = roles[user.authUid] === "admin" ? "admin" : "member";
-    });
-    return users;
-  }
-
-  // Normal kaydetme yalnızca stok ve hareket verisini yazar. Kullanıcı ve rol
-  // kayıtları kendi küçük fonksiyonlarıyla güncellenir.
+  // Üyelik verisi ortak durumun parçası değildir. Firebase Authentication yalnızca
+  // görünmeyen anonim erişim ve geçici yönetici doğrulaması için kullanılır.
   function inventoryPayload(state) {
     return {
       schemaVersion: SCHEMA_VERSION,
       tables: normalizeTables(state.tables),
-      logs: toArray(state.logs),
-      definitions: window.DepoCatalog.normalizeDefinitions(
-        state.definitions,
-        normalizeTables(state.tables)
-      )
+      logs: toArray(state.logs)
     };
   }
 
@@ -203,9 +194,10 @@
     const localUi = readLocalUi();
     const merged = normalizeState({
       schemaVersion: SCHEMA_VERSION,
-      users: usersFromCloud(cloudState),
       tables: normalizeTables(cloudState.tables),
       logs: toArray(cloudState.logs),
+      // Eski kurulumlarda bulunabilir; normalizeState bunu sütun seçeneklerine
+      // taşıdıktan sonra aktif durumdan kaldırır.
       definitions: cloudState.definitions,
       session: Object.assign({}, defaults.session, localUi.session || {}),
       settings: Object.assign({}, defaults.settings, localUi.settings || {})
@@ -276,6 +268,9 @@
       }
 
       const fields = {};
+      const removedFields = Object.keys(oldItem).filter(function (key) {
+        return key !== "id" && !Object.prototype.hasOwnProperty.call(item, key);
+      });
       Object.keys(item).forEach(function (key) {
         if (key === "id" || key === "quantity") return;
         if (JSON.stringify(oldItem[key]) !== JSON.stringify(item[key])) {
@@ -283,16 +278,19 @@
         }
       });
 
+      const hasQuantity = Object.prototype.hasOwnProperty.call(item, "quantity");
       const oldQuantity = Number(oldItem.quantity);
       const newQuantity = Number(item.quantity);
-      const quantityChanged = JSON.stringify(oldItem.quantity) !== JSON.stringify(item.quantity);
+      const quantityChanged = hasQuantity &&
+        JSON.stringify(oldItem.quantity) !== JSON.stringify(item.quantity);
       const hasQuantityDelta = Number.isFinite(oldQuantity) && Number.isFinite(newQuantity) &&
         oldQuantity !== newQuantity;
       const hasQuantitySet = quantityChanged && !hasQuantityDelta;
-      if (hasQuantityDelta || hasQuantitySet || Object.keys(fields).length) {
+      if (hasQuantityDelta || hasQuantitySet || Object.keys(fields).length || removedFields.length) {
         changes.push({
           id: id,
           fields: fields,
+          removedFields: removedFields,
           quantityDelta: hasQuantityDelta ? newQuantity - oldQuantity : 0,
           quantitySet: hasQuantitySet ? clone(item.quantity) : undefined,
           fallback: clone(item)
@@ -325,6 +323,9 @@
         return;
       }
       Object.assign(item, clone(change.fields));
+      (change.removedFields || []).forEach(function (key) {
+        delete item[key];
+      });
       if (Object.prototype.hasOwnProperty.call(change, "quantitySet") &&
           change.quantitySet !== undefined) {
         item.quantity = clone(change.quantitySet);
@@ -333,6 +334,15 @@
       }
     });
     return items;
+  }
+
+  function tableMetadata(table) {
+    return {
+      name: table.name || "",
+      kind: table.kind || "",
+      columns: toArray(table.columns),
+      deletedColumnKeys: toArray(table.deletedColumnKeys).map(String)
+    };
   }
 
   function tablePatch(beforeTables, afterTables) {
@@ -349,12 +359,12 @@
       }
 
       const items = itemPatch(oldTable.items, table.items);
-      const nameChanged = oldTable.name !== table.name;
-      if (nameChanged || items.changes.length || items.removedIds.length) {
+      const metadata = tableMetadata(table);
+      const metadataChanged = JSON.stringify(tableMetadata(oldTable)) !== JSON.stringify(metadata);
+      if (metadataChanged || items.changes.length || items.removedIds.length) {
         changes.push({
           id: id,
-          nameChanged: nameChanged,
-          name: table.name,
+          metadata: metadataChanged ? metadata : null,
           items: items
         });
       }
@@ -384,25 +394,22 @@
         // silinmiş listeyi yeniden oluşturmamalıdır.
         return;
       }
-      if (change.nameChanged) table.name = change.name;
+      if (change.metadata) {
+        table.name = change.metadata.name;
+        table.kind = change.metadata.kind;
+        table.columns = toArray(change.metadata.columns);
+        table.deletedColumnKeys = toArray(change.metadata.deletedColumnKeys).map(String);
+      }
       table.items = applyItemPatch(table.items, change.items);
     });
     return tables;
   }
 
   function inventoryPatch(before, after) {
-    const base = before || { tables: [], logs: [], definitions: { categories: [] } };
+    const base = before || { tables: [], logs: [] };
     return {
       tables: tablePatch(base.tables, after.tables),
-      logs: recordPatch(base.logs, after.logs),
-      categories: recordPatch(
-        base.definitions && base.definitions.categories,
-        after.definitions && after.definitions.categories
-      ),
-      footprints: JSON.stringify(base.definitions && base.definitions.footprints || []) ===
-        JSON.stringify(after.definitions && after.definitions.footprints || [])
-        ? null
-        : clone(after.definitions && after.definitions.footprints || [])
+      logs: recordPatch(base.logs, after.logs)
     };
   }
 
@@ -411,10 +418,7 @@
       !patch.tables.changes.length &&
       !patch.tables.removedIds.length &&
       !patch.logs.upserts.length &&
-      !patch.logs.removedIds.length &&
-      !patch.categories.upserts.length &&
-      !patch.categories.removedIds.length &&
-      patch.footprints === null
+      !patch.logs.removedIds.length
     );
   }
 
@@ -425,14 +429,6 @@
     await cloudReference.child("logs").transaction(function (logs) {
       return applyRecordPatch(logs, patch.logs);
     });
-    if (patch.categories.upserts.length || patch.categories.removedIds.length) {
-      await cloudReference.child("definitions/categories").transaction(function (categories) {
-        return applyRecordPatch(categories, patch.categories);
-      });
-    }
-    if (patch.footprints !== null) {
-      await cloudReference.child("definitions/footprints").set(patch.footprints);
-    }
     await cloudReference.child("schemaVersion").set(SCHEMA_VERSION);
   }
 
@@ -443,8 +439,7 @@
     if (!cloudState) return;
     lastCloudInventory = inventoryPayload({
       tables: cloudState.tables || [],
-      logs: cloudState.logs || [],
-      definitions: cloudState.definitions
+      logs: cloudState.logs || []
     });
     if (watchCallback) watchCallback(mergeCloudWithLocal(cloudState));
   }
@@ -466,48 +461,6 @@
       });
   }
 
-  async function writeCurrentUser(user) {
-    if (!user || !user.authUid) return;
-    await usersReference.child(user.authUid).set(userRecord(user));
-  }
-
-  // İlk gerçek hesap yönetici olur; sonraki hesaplar üye olarak eklenir.
-  // İşlem tüm rol listesi üzerinde transaction olduğu için iki kişi aynı anda
-  // kaydolsa bile yalnızca biri ilk yönetici olabilir.
-  async function ensureCurrentUserRole(uid) {
-    const userRoleReference = rolesReference.child(uid);
-    const currentRoleSnapshot = await userRoleReference.once("value");
-    const currentRole = currentRoleSnapshot.val();
-
-    if (currentRole === "admin" || currentRole === "member") {
-      return currentRole;
-    }
-
-    // Rol listesinin tamamını yazmak diğer kullanıcıların yetkilerini silebilirdi.
-    // Önce yönetici var mı diye bakıp yalnızca giriş yapan kişinin rolünü oluştururuz.
-    const rolesSnapshot = await rolesReference.once("value");
-    const roles = rolesSnapshot.val() || {};
-    const hasAdministrator = Object.keys(roles).some(function (key) {
-      return roles[key] === "admin";
-    });
-    const firstRole = hasAdministrator ? "member" : "admin";
-    let result;
-    try {
-      result = await userRoleReference.transaction(function (role) {
-        return role === "admin" || role === "member" ? role : firstRole;
-      });
-    } catch (error) {
-      // İki kişi ilk kez aynı anda kaydolursa yalnızca biri ilk yönetici olabilir.
-      // İkinci kayıt, güvenlik kuralına takılmak yerine normal üye olarak tamamlanır.
-      if (firstRole !== "admin") throw error;
-      result = await userRoleReference.transaction(function (role) {
-        return role === "admin" || role === "member" ? role : "member";
-      });
-    }
-    const savedRole = result.snapshot.val();
-    return savedRole === "admin" ? "admin" : "member";
-  }
-
   function firebaseErrorMessage(error) {
     const code = error && error.code || "";
     const message = String(error && error.message || "");
@@ -516,22 +469,10 @@
     }
     if (code.includes("invalid-credential") || code.includes("wrong-password") ||
         code.includes("user-not-found")) {
-      return "Kullanıcı adı veya şifre hatalı.";
+      return "Yönetici parolası hatalı.";
     }
-    if (code.includes("email-already-in-use")) {
-      return "Bu kullanıcı adı kullanılıyor. Daha özgün bir ad seçin.";
-    }
-    if (code.includes("weak-password")) {
-      return "Şifre en az 6 karakter olmalıdır.";
-    }
-    if (code.includes("requires-recent-login")) {
-      return "Güvenlik için mevcut şifrenizle yeniden doğrulama yapın.";
-    }
-    if (code.includes("invalid-email")) {
-      return "Geçerli bir kullanıcı adı yazın.";
-    }
-    if (code.includes("operation-not-allowed")) {
-      return "Firebase'de E-posta/Şifre girişi henüz etkinleştirilmemiş.";
+    if (code.includes("operation-not-allowed") || code.includes("admin-restricted-operation")) {
+      return "Firebase Authentication içinde Anonim ve E-posta/Şifre girişlerini etkinleştirin.";
     }
     if (code.includes("network-request-failed")) {
       return "Firebase bağlantısı kurulamadı. İnternet bağlantısını kontrol edin.";
@@ -555,40 +496,12 @@
     });
   }
 
-  function pageWasReloaded() {
-    const navigation = window.performance &&
-      window.performance.getEntriesByType &&
-      window.performance.getEntriesByType("navigation")[0];
-    return Boolean(navigation && navigation.type === "reload");
-  }
-
-  // Firebase tarayicida oturumu saklar. Sayfa yenilendiginde bu kimligi ortak
-  // kullanici kaydi ve guncel yetkiyle yeniden birlestiririz.
-  async function restoreAuthenticatedSession(firebaseUser) {
-    const role = await ensureCurrentUserRole(firebaseUser.uid);
-    const loaded = await loadCloudState();
-    let user = loaded.users.find(function (entry) {
-      return entry.authUid === firebaseUser.uid;
-    });
-
-    if (!user) {
-      const emailUsername = String(firebaseUser.email || "").split("@")[0];
-      const username = emailUsername || firebaseUser.uid.slice(0, 8);
-      user = {
-        id: "user-" + firebaseUser.uid,
-        authUid: firebaseUser.uid,
-        username: username,
-        name: firebaseUser.displayName || username,
-        role: "member"
-      };
-      loaded.users.push(user);
-    }
-
-    user.role = role;
-    loaded.session.currentUserId = user.id;
-    await writeCurrentUser(user);
-    writeLocalUi(loaded);
-    return loaded;
+  async function ensureAnonymousIdentity() {
+    if (auth.currentUser && auth.currentUser.isAnonymous) return auth.currentUser;
+    if (auth.currentUser) await auth.signOut();
+    clearAdministratorSession();
+    const credential = await auth.signInAnonymously();
+    return credential.user;
   }
 
   async function initialize() {
@@ -596,30 +509,27 @@
       throw new Error("Firebase kitaplığı veya yapılandırması yüklenemedi.");
     }
 
-    if (!window.firebase.apps.length) {
-      window.firebase.initializeApp(window.DepoFirebaseConfig);
-    }
-    auth = window.firebase.auth();
-    database = window.firebase.database();
-    cloudReference = database.ref(CLOUD_PATH);
-    usersReference = cloudReference.child("userDirectory");
-    rolesReference = cloudReference.child("rolesByUid");
+    try {
+      if (!window.firebase.apps.length) {
+        window.firebase.initializeApp(window.DepoFirebaseConfig);
+      }
+      auth = window.firebase.auth();
+      database = window.firebase.database();
+      cloudReference = database.ref(CLOUD_PATH);
 
-    // SESSION kaliciligi sayfa yenilemesinde kimligi korur. Tarayici oturumu
-    // sona erdiginde Firebase kimligi otomatik olarak temizlenir.
-    await auth.setPersistence(window.firebase.auth.Auth.Persistence.SESSION);
-    const firebaseUser = await waitForInitialAuthState();
-    if (firebaseUser) {
-      // Chrome kapatilan sekmeleri geri yuklerken sessionStorage verisini de
-      // geri getirebilir. Yalnizca gercek F5 yenilemesinde oturumu surdururuz.
-      if (pageWasReloaded()) return restoreAuthenticatedSession(firebaseUser);
-      await auth.signOut();
+      // SESSION kalıcılığı F5 yenilemesinde anonim kimliği ve geçici yönetici
+      // modunu korur. Yönetici süresi ayrıca sessionStorage ile sınırlandırılır.
+      await auth.setPersistence(window.firebase.auth.Auth.Persistence.SESSION);
+      const firebaseUser = await waitForInitialAuthState();
+      if (isAdministratorIdentity(firebaseUser)) {
+        if (!isAdministrator()) await ensureAnonymousIdentity();
+      } else if (!firebaseUser || !firebaseUser.isAnonymous) {
+        await ensureAnonymousIdentity();
+      }
+      return await loadCloudState();
+    } catch (error) {
+      throw new Error(firebaseErrorMessage(error));
     }
-
-    // Giris yokken yalnizca yerel gorunum ayarlari hazirlanir.
-    const initialState = normalizeState(window.DepoData.createInitialState());
-    initialState.session.currentUserId = null;
-    return initialState;
   }
 
   async function loadCloudState() {
@@ -633,152 +543,55 @@
       await writeInventory(cloudState);
     }
 
-    lastCloudInventory = inventoryPayload({
+    const cloudInventory = inventoryPayload({
       tables: cloudState.tables || [],
-      logs: cloudState.logs || [],
-      definitions: cloudState.definitions
+      logs: cloudState.logs || []
     });
-    return mergeCloudWithLocal(cloudState);
-  }
+    const merged = mergeCloudWithLocal(cloudState);
+    const migratedInventory = inventoryPayload(merged);
+    const migrationPatch = inventoryPatch(cloudInventory, migratedInventory);
 
-  async function signIn(username, password) {
-    try {
-      const credential = await auth.signInWithEmailAndPassword(usernameEmail(username), password);
-      const role = await ensureCurrentUserRole(credential.user.uid);
-      const loaded = await loadCloudState();
-      let user = loaded.users.find(function (entry) {
-        return entry.authUid === credential.user.uid;
-      });
-
-      // Eski JSON'daki kullanıcı ilk Firebase girişinde kimliğiyle eşleştirilir.
-      if (!user) {
-        user = loaded.users.find(function (entry) {
-          return normalizeUsername(entry.username) === normalizeUsername(username);
-        });
-      }
-      if (!user) {
-        user = {
-          id: "user-" + credential.user.uid,
-          authUid: credential.user.uid,
-          username: username,
-          name: credential.user.displayName || username,
-          role: "member"
-        };
-        loaded.users.push(user);
-      }
-
-      user.role = role;
-      loaded.session.currentUserId = user.id;
-      await writeCurrentUser(user);
-      writeLocalUi(loaded);
-      return loaded;
-    } catch (error) {
-      throw new Error(firebaseErrorMessage(error));
+    // Eski ayrı kataloglar bellekte doğru görünmekle kalmasın; ilk başarılı
+    // girişte somut sütun seçenekleri Firebase'e de bir kez yazılsın.
+    if (!patchIsEmpty(migrationPatch)) {
+      await writeInventoryPatch(migrationPatch);
+    } else if (Number(cloudState.schemaVersion) !== SCHEMA_VERSION) {
+      await cloudReference.child("schemaVersion").set(SCHEMA_VERSION);
     }
+    lastCloudInventory = clone(migratedInventory);
+    return merged;
   }
 
-  async function register(username, password, name) {
-    try {
-      const credential = await auth.createUserWithEmailAndPassword(usernameEmail(username), password);
-      await credential.user.updateProfile({ displayName: name });
-      const role = await ensureCurrentUserRole(credential.user.uid);
-      const loaded = await loadCloudState();
-      let user = loaded.users.find(function (entry) {
-        return normalizeUsername(entry.username) === normalizeUsername(username);
-      });
+  async function enterAdministrator(password) {
+    if (!administratorEmail()) {
+      throw new Error("Yönetici hesabı yapılandırılmamış.");
+    }
+    if (!password) throw new Error("Yönetici parolasını yazın.");
 
-      if (user && user.authUid && user.authUid !== credential.user.uid) {
-        await credential.user.delete();
-        throw new Error("Bu kullanıcı adı kullanılıyor. Daha özgün bir ad seçin.");
+    try {
+      const credential = await auth.signInWithEmailAndPassword(administratorEmail(), password);
+      if (!isAdministratorIdentity(credential.user)) {
+        await ensureAnonymousIdentity();
+        throw new Error("Bu hesap yönetici hesabı olarak yapılandırılmamış.");
       }
-      if (!user) {
-        user = {
-          id: "user-" + credential.user.uid,
-          username: username,
-          name: name,
-          role: "member"
-        };
-        loaded.users.push(user);
-      }
-      user.authUid = credential.user.uid;
-      user.name = name;
-      user.role = role;
-      loaded.session.currentUserId = user.id;
-      await writeCurrentUser(user);
+      touchAdministratorSession();
+      const loaded = await loadCloudState();
       writeLocalUi(loaded);
       return loaded;
     } catch (error) {
+      if (!auth.currentUser) await ensureAnonymousIdentity();
       if (error.message && !error.code) throw error;
       throw new Error(firebaseErrorMessage(error));
     }
   }
 
-  async function signOut() {
-    if (stopWatching) {
-      stopWatching();
-      stopWatching = null;
-    }
+  async function exitAdministrator() {
+    clearAdministratorSession();
     await auth.signOut();
-  }
-
-  async function reauthenticateCurrentUser(password) {
-    if (!auth || !auth.currentUser) {
-      throw new Error("Hesap işlemi için giriş yapmalısınız.");
-    }
-    if (!password) {
-      throw new Error("Bu değişiklik için mevcut şifrenizi yazın.");
-    }
-    const credential = window.firebase.auth.EmailAuthProvider.credential(
-      auth.currentUser.email,
-      password
-    );
-    await auth.currentUser.reauthenticateWithCredential(credential);
-  }
-
-  async function updateCurrentUserProfile(changes) {
-    if (!auth || !auth.currentUser) {
-      throw new Error("Hesap bilgilerini değiştirmek için giriş yapmalısınız.");
-    }
-
-    const uid = auth.currentUser.uid;
-    const snapshot = await usersReference.child(uid).once("value");
-    const current = snapshot.val();
-    if (!current) throw new Error("Kullanıcı kaydı bulunamadı.");
-
-    const username = String(changes.username || "").trim();
-    const name = String(changes.name || "").trim();
-    if (!normalizeUsername(username)) throw new Error("Geçerli bir kullanıcı adı yazın.");
-    if (!name) throw new Error("Ad soyad alanı zorunludur.");
-
-    const usernameChanged =
-      normalizeUsername(username) !== normalizeUsername(current.username);
-    if (usernameChanged) {
-      await reauthenticateCurrentUser(changes.currentPassword);
-      await auth.currentUser.updateEmail(usernameEmail(username));
-    }
-    if (name !== current.name) {
-      await auth.currentUser.updateProfile({ displayName: name });
-    }
-
-    const updated = {
-      id: current.id || "user-" + uid,
-      authUid: uid,
-      username: username,
-      name: name
-    };
-    await usersReference.child(uid).set(updated);
-    updated.role = (await rolesReference.child(uid).once("value")).val() === "admin"
-      ? "admin"
-      : "member";
-    return updated;
-  }
-
-  async function changeCurrentUserPassword(currentPassword, newPassword) {
-    if (String(newPassword || "").length < 6) {
-      throw new Error("Yeni şifre en az 6 karakter olmalıdır.");
-    }
-    await reauthenticateCurrentUser(currentPassword);
-    await auth.currentUser.updatePassword(newPassword);
+    await ensureAnonymousIdentity();
+    const loaded = await loadCloudState();
+    writeLocalUi(loaded);
+    return loaded;
   }
 
   function watch(onChange) {
@@ -790,8 +603,7 @@
       if (pendingWriteCount) return;
       lastCloudInventory = inventoryPayload({
         tables: cloudState.tables || [],
-        logs: cloudState.logs || [],
-        definitions: cloudState.definitions
+        logs: cloudState.logs || []
       });
       onChange(mergeCloudWithLocal(cloudState));
     });
@@ -818,40 +630,6 @@
     return true;
   }
 
-  async function setUserRole(userId, role) {
-    if (!auth || !auth.currentUser) {
-      throw new Error("Yetki değiştirmek için giriş yapmalısınız.");
-    }
-    if (role !== "admin" && role !== "member") {
-      throw new Error("Geçersiz kullanıcı yetkisi.");
-    }
-
-    const cloudState = (await cloudReference.once("value")).val() || {};
-    const currentRole = (cloudState.rolesByUid || {})[auth.currentUser.uid];
-    if (currentRole !== "admin") {
-      throw new Error("Bu işlem yalnızca yöneticiler tarafından yapılabilir.");
-    }
-
-    const users = usersFromCloud(cloudState);
-    const user = users.find(function (entry) {
-      return entry.id === userId;
-    });
-    if (!user || !user.authUid) {
-      throw new Error("Kullanıcı kaydı bulunamadı.");
-    }
-
-    const roles = cloudState.rolesByUid || {};
-    const administratorCount = Object.keys(roles).filter(function (uid) {
-      return roles[uid] === "admin";
-    }).length;
-    if (roles[user.authUid] === "admin" && role === "member" && administratorCount <= 1) {
-      throw new Error("Sistemde en az bir yönetici kalmalıdır.");
-    }
-
-    await rolesReference.child(user.authUid).set(role);
-    return role;
-  }
-
   async function replace(imported) {
     const normalized = normalizeState(imported);
     writeLocalUi(normalized);
@@ -876,13 +654,15 @@
   window.DepoStore = {
     clone: clone,
     initialize: initialize,
-    signIn: signIn,
-    register: register,
-    signOut: signOut,
-    updateCurrentUserProfile: updateCurrentUserProfile,
-    changeCurrentUserPassword: changeCurrentUserPassword,
+    enterAdministrator: enterAdministrator,
+    exitAdministrator: exitAdministrator,
+    isAdministrator: isAdministrator,
+    hasAdministratorIdentity: function () {
+      return isAdministratorIdentity(auth && auth.currentUser);
+    },
+    touchAdministratorSession: touchAdministratorSession,
+    administratorExpiresAt: administratorExpiresAt,
     watch: watch,
-    setUserRole: setUserRole,
     replace: replace,
     save: save,
     flush: function () { return writeQueue; },

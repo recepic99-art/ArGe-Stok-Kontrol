@@ -1,63 +1,5 @@
 {
-  "schemaVersion": 7,
-  "users": [
-    {
-      "id": "user-1nzLuRJA7UauOt7btWk4E5MKCny1",
-      "authUid": "1nzLuRJA7UauOt7btWk4E5MKCny1",
-      "username": "snsergn",
-      "name": "snsergn",
-      "role": "member"
-    },
-    {
-      "id": "user-Da467Rpq41UHYpNoS7y8EAR5tf13",
-      "authUid": "Da467Rpq41UHYpNoS7y8EAR5tf13",
-      "username": "recepic",
-      "name": "Recep İç",
-      "role": "admin"
-    },
-    {
-      "id": "user-QV3Sutl7Zpcei4x0lcLjLfqBTyu1",
-      "authUid": "QV3Sutl7Zpcei4x0lcLjLfqBTyu1",
-      "username": "mevlutoner",
-      "name": "Mevlüt ÖNER",
-      "role": "member"
-    },
-    {
-      "id": "user-ZJB6RqdOmaMhz5jvn4HQhheKxA52",
-      "authUid": "ZJB6RqdOmaMhz5jvn4HQhheKxA52",
-      "username": "musttafaucan",
-      "name": "musttafaucan",
-      "role": "member"
-    },
-    {
-      "id": "user-cCxSj2LKtzTb58xNXmq9uMBU9E73",
-      "authUid": "cCxSj2LKtzTb58xNXmq9uMBU9E73",
-      "username": "eypsyn",
-      "name": "Eyüp SAYIN",
-      "role": "member"
-    },
-    {
-      "id": "user-dZ6udjpmzoMEBzlHgw4ljuL7Rg62",
-      "authUid": "dZ6udjpmzoMEBzlHgw4ljuL7Rg62",
-      "username": "eyupsayin",
-      "name": "Eyüp SAYIN",
-      "role": "member"
-    },
-    {
-      "id": "user-j9bikDDu3ghGjwWEgtYBB1JsRf43",
-      "authUid": "j9bikDDu3ghGjwWEgtYBB1JsRf43",
-      "username": "deneme",
-      "name": "Adem Ezici",
-      "role": "member"
-    },
-    {
-      "id": "user-vHhk709RrLbnw44Q8gaGIhgGaXi1",
-      "authUid": "vHhk709RrLbnw44Q8gaGIhgGaXi1",
-      "username": "MTK",
-      "name": "Mustafa Talip Koyuncu",
-      "role": "member"
-    }
-  ],
+  "schemaVersion": 11,
   "tables": [
     {
       "id": "t-main",
@@ -3399,12 +3341,358 @@
           "updatedAt": "11.08.2026 15:06"
         }
       ],
-      "name": "Numune Malzemeler Listesi"
+      "name": "Numune Malzemeler Listesi",
+      "kind": "stock",
+      "columns": [
+        {
+          "key": "id",
+          "label": "ID",
+          "visible": true,
+          "system": true,
+          "fieldType": "text",
+          "options": [],
+          "editable": false,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "name",
+          "label": "Malzeme Adı",
+          "visible": true,
+          "system": true,
+          "fieldType": "text",
+          "options": [],
+          "editable": true,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "category",
+          "label": "Cins/Kategori",
+          "visible": true,
+          "system": true,
+          "fieldType": "select",
+          "options": [
+            "Aluminum Electrolytic Capacitor",
+            "Analog Switch",
+            "Audio Amplifier",
+            "Bridge Rectifier",
+            "Buck Converter",
+            "Buzzer",
+            "Capacitor",
+            "Connector",
+            "Crystal",
+            "Current Sense Amplifier",
+            "Development Board",
+            "Development Tool",
+            "Encoder",
+            "Ferrite Bead",
+            "Inductor",
+            "Interface Converter",
+            "IR Receiver",
+            "K-Line Transceiver",
+            "LCD",
+            "LDO Regulator",
+            "LED",
+            "LED Display Driver",
+            "Linear Regulator",
+            "Logic Gate",
+            "Microcontroller",
+            "MOSFET",
+            "Op-Amp",
+            "Optocoupler",
+            "Power Resistor",
+            "Rectifier Diode",
+            "Reed Switch",
+            "Relay",
+            "Resettable Fuse",
+            "Resistor",
+            "Resistor Network",
+            "RS-485 Transceiver",
+            "Schottky Diode",
+            "Shunt Resistor",
+            "Switch",
+            "Tantalum Capacitor",
+            "Terminal Block",
+            "Timer IC",
+            "Touch Controller",
+            "Triac",
+            "Trimpot",
+            "TVS Diode",
+            "Unverified IC",
+            "USB-UART Bridge",
+            "Wi-Fi/Bluetooth MCU Module",
+            "Wi-Fi/Bluetooth Module",
+            "Zener Diode"
+          ],
+          "editable": true,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "footprint",
+          "label": "Kılıf",
+          "visible": true,
+          "system": true,
+          "fieldType": "select",
+          "options": [
+            "0603",
+            "0805",
+            "1206",
+            "2512",
+            "3225",
+            "Case A (3216-18)",
+            "Case B (3528-21)",
+            "Case C (6032-28)",
+            "DO-201",
+            "DO-214AB (SMC)",
+            "DO-214AC (SMA)",
+            "HC-49/SM",
+            "HC-49/U",
+            "HSOIC-8 PowerPAD",
+            "HSOP-8",
+            "HVSSOP-10",
+            "LQFP-64",
+            "MBF",
+            "Micro-SIM",
+            "MSOP-8",
+            "PDIP-8",
+            "PDIP-40",
+            "PowerPAK SO-8L",
+            "PSOP-8",
+            "SC-70-6",
+            "SIP-5",
+            "SMD",
+            "SMD Module",
+            "SO-6 (4-pin)",
+            "SOD-80",
+            "SOD-123",
+            "SOIC-8",
+            "SOIC-8 EP",
+            "SOIC-14",
+            "SOP-4",
+            "SOP-8",
+            "SOP-8 (PS)",
+            "SOP-8 EP",
+            "SOP-16",
+            "SOP-24",
+            "SOP-28",
+            "SOT-23",
+            "SOT-23-5",
+            "SOT-23-6",
+            "SOT-26",
+            "SOT-223",
+            "SOT-563",
+            "SSOP-28",
+            "THT",
+            "THT Axial",
+            "TO-220F",
+            "TO-220F2",
+            "TO-252 (DPAK)",
+            "TO-263 (D2PAK)",
+            "TSSOP-8",
+            "TSSOP-14",
+            "VSSOP-8"
+          ],
+          "editable": true,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "box",
+          "label": "Kutu",
+          "visible": true,
+          "system": true,
+          "fieldType": "text",
+          "options": [],
+          "editable": true,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "quantity",
+          "label": "Miktar",
+          "visible": true,
+          "system": true,
+          "fieldType": "number",
+          "options": [],
+          "editable": true,
+          "integer": true,
+          "numeric": true
+        },
+        {
+          "key": "unit",
+          "label": "Birim",
+          "visible": true,
+          "system": true,
+          "fieldType": "select",
+          "options": [
+            "adet",
+            "gram",
+            "litre",
+            "metre"
+          ],
+          "editable": true,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "critical",
+          "label": "Kritik Seviye",
+          "visible": false,
+          "system": true,
+          "fieldType": "number",
+          "options": [],
+          "editable": true,
+          "integer": true,
+          "numeric": true
+        },
+        {
+          "key": "description",
+          "label": "Açıklama",
+          "visible": true,
+          "system": true,
+          "fieldType": "multiline",
+          "options": [],
+          "editable": true,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "updatedAt",
+          "label": "Son Güncelleme",
+          "visible": true,
+          "system": true,
+          "fieldType": "text",
+          "options": [],
+          "editable": false,
+          "integer": false,
+          "numeric": false
+        }
+      ]
     },
     {
       "id": "table-3HJ7PBA",
       "name": "Kalite Kontrol",
-      "items": []
+      "items": [],
+      "kind": "quality",
+      "columns": [
+        {
+          "key": "materialName",
+          "label": "Malzeme Adı",
+          "visible": true,
+          "system": true,
+          "fieldType": "text",
+          "options": [],
+          "editable": true,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "supplier",
+          "label": "Geldiği Yer",
+          "visible": true,
+          "system": true,
+          "fieldType": "text",
+          "options": [],
+          "editable": true,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "incomingQuantity",
+          "label": "Gelen Adet",
+          "visible": true,
+          "system": true,
+          "fieldType": "number",
+          "options": [],
+          "editable": true,
+          "integer": true,
+          "numeric": true
+        },
+        {
+          "key": "sampleQuantity",
+          "label": "Numune Adedi",
+          "visible": true,
+          "system": true,
+          "fieldType": "number",
+          "options": [],
+          "editable": true,
+          "integer": true,
+          "numeric": true
+        },
+        {
+          "key": "controlMethod",
+          "label": "Kontrol Yöntemi",
+          "visible": true,
+          "system": true,
+          "fieldType": "multiline",
+          "options": [],
+          "editable": true,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "approvalStatus",
+          "label": "Onay Durumu",
+          "visible": true,
+          "system": true,
+          "fieldType": "select",
+          "options": [
+            "Beklemede",
+            "Onaylandı",
+            "Red",
+            "Şartlı Onay"
+          ],
+          "editable": true,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "checkedBy",
+          "label": "Kontrol Eden",
+          "visible": true,
+          "system": true,
+          "fieldType": "text",
+          "options": [],
+          "editable": true,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "checkedAt",
+          "label": "Kontrol Tarihi",
+          "visible": true,
+          "system": true,
+          "fieldType": "date",
+          "options": [],
+          "editable": true,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "description",
+          "label": "Açıklama",
+          "visible": true,
+          "system": true,
+          "fieldType": "multiline",
+          "options": [],
+          "editable": true,
+          "integer": false,
+          "numeric": false
+        },
+        {
+          "key": "updatedAt",
+          "label": "Son Güncelleme",
+          "visible": true,
+          "system": true,
+          "fieldType": "text",
+          "options": [],
+          "editable": false,
+          "integer": false,
+          "numeric": false
+        }
+      ]
     }
   ],
   "logs": [
@@ -3451,279 +3739,12 @@
       "user": "Recep"
     }
   ],
-  "definitions": {
-    "categories": [
-      {
-        "id": "category-aluminum-electrolytic-capacitor",
-        "name": "Aluminum Electrolytic Capacitor"
-      },
-      {
-        "id": "category-analog-switch",
-        "name": "Analog Switch"
-      },
-      {
-        "id": "category-audio-amplifier",
-        "name": "Audio Amplifier"
-      },
-      {
-        "id": "category-bridge-rectifier",
-        "name": "Bridge Rectifier"
-      },
-      {
-        "id": "category-buck-converter",
-        "name": "Buck Converter"
-      },
-      {
-        "id": "category-buzzer",
-        "name": "Buzzer"
-      },
-      {
-        "id": "category-capacitor",
-        "name": "Capacitor"
-      },
-      {
-        "id": "category-connector",
-        "name": "Connector"
-      },
-      {
-        "id": "category-crystal",
-        "name": "Crystal"
-      },
-      {
-        "id": "category-current-sense-amplifier",
-        "name": "Current Sense Amplifier"
-      },
-      {
-        "id": "category-development-board",
-        "name": "Development Board"
-      },
-      {
-        "id": "category-development-tool",
-        "name": "Development Tool"
-      },
-      {
-        "id": "category-encoder",
-        "name": "Encoder"
-      },
-      {
-        "id": "category-ferrite-bead",
-        "name": "Ferrite Bead"
-      },
-      {
-        "id": "category-inductor",
-        "name": "Inductor"
-      },
-      {
-        "id": "category-interface-converter",
-        "name": "Interface Converter"
-      },
-      {
-        "id": "category-ir-receiver",
-        "name": "IR Receiver"
-      },
-      {
-        "id": "category-k-line-transceiver",
-        "name": "K-Line Transceiver"
-      },
-      {
-        "id": "category-lcd",
-        "name": "LCD"
-      },
-      {
-        "id": "category-ldo-regulator",
-        "name": "LDO Regulator"
-      },
-      {
-        "id": "category-led",
-        "name": "LED"
-      },
-      {
-        "id": "category-led-display-driver",
-        "name": "LED Display Driver"
-      },
-      {
-        "id": "category-linear-regulator",
-        "name": "Linear Regulator"
-      },
-      {
-        "id": "category-logic-gate",
-        "name": "Logic Gate"
-      },
-      {
-        "id": "category-microcontroller",
-        "name": "Microcontroller"
-      },
-      {
-        "id": "category-mosfet",
-        "name": "MOSFET"
-      },
-      {
-        "id": "category-op-amp",
-        "name": "Op-Amp"
-      },
-      {
-        "id": "category-optocoupler",
-        "name": "Optocoupler"
-      },
-      {
-        "id": "category-power-resistor",
-        "name": "Power Resistor"
-      },
-      {
-        "id": "category-rectifier-diode",
-        "name": "Rectifier Diode"
-      },
-      {
-        "id": "category-reed-switch",
-        "name": "Reed Switch"
-      },
-      {
-        "id": "category-relay",
-        "name": "Relay"
-      },
-      {
-        "id": "category-resettable-fuse",
-        "name": "Resettable Fuse"
-      },
-      {
-        "id": "category-resistor",
-        "name": "Resistor"
-      },
-      {
-        "id": "category-resistor-network",
-        "name": "Resistor Network"
-      },
-      {
-        "id": "category-rs-485-transceiver",
-        "name": "RS-485 Transceiver"
-      },
-      {
-        "id": "category-schottky-diode",
-        "name": "Schottky Diode"
-      },
-      {
-        "id": "category-shunt-resistor",
-        "name": "Shunt Resistor"
-      },
-      {
-        "id": "category-switch",
-        "name": "Switch"
-      },
-      {
-        "id": "category-tantalum-capacitor",
-        "name": "Tantalum Capacitor"
-      },
-      {
-        "id": "category-terminal-block",
-        "name": "Terminal Block"
-      },
-      {
-        "id": "category-timer-ic",
-        "name": "Timer IC"
-      },
-      {
-        "id": "category-touch-controller",
-        "name": "Touch Controller"
-      },
-      {
-        "id": "category-triac",
-        "name": "Triac"
-      },
-      {
-        "id": "category-trimpot",
-        "name": "Trimpot"
-      },
-      {
-        "id": "category-tvs-diode",
-        "name": "TVS Diode"
-      },
-      {
-        "id": "category-unverified-ic",
-        "name": "Unverified IC"
-      },
-      {
-        "id": "category-usb-uart-bridge",
-        "name": "USB-UART Bridge"
-      },
-      {
-        "id": "category-wi-fi-bluetooth-mcu-module",
-        "name": "Wi-Fi/Bluetooth MCU Module"
-      },
-      {
-        "id": "category-wi-fi-bluetooth-module",
-        "name": "Wi-Fi/Bluetooth Module"
-      },
-      {
-        "id": "category-zener-diode",
-        "name": "Zener Diode"
-      }
-    ],
-    "footprints": [
-      "0603",
-      "0805",
-      "1206",
-      "2512",
-      "3225",
-      "Case A (3216-18)",
-      "Case B (3528-21)",
-      "Case C (6032-28)",
-      "DO-201",
-      "DO-214AB (SMC)",
-      "DO-214AC (SMA)",
-      "HC-49/SM",
-      "HC-49/U",
-      "HSOIC-8 PowerPAD",
-      "HSOP-8",
-      "HVSSOP-10",
-      "LQFP-64",
-      "MBF",
-      "Micro-SIM",
-      "MSOP-8",
-      "PDIP-40",
-      "PDIP-8",
-      "PowerPAK SO-8L",
-      "PSOP-8",
-      "SC-70-6",
-      "SIP-5",
-      "SMD",
-      "SMD Module",
-      "SO-6 (4-pin)",
-      "SOD-123",
-      "SOD-80",
-      "SOIC-14",
-      "SOIC-8",
-      "SOIC-8 EP",
-      "SOP-16",
-      "SOP-24",
-      "SOP-28",
-      "SOP-4",
-      "SOP-8",
-      "SOP-8 EP",
-      "SOP-8 (PS)",
-      "SOT-223",
-      "SOT-23",
-      "SOT-23-5",
-      "SOT-23-6",
-      "SOT-26",
-      "SOT-563",
-      "SSOP-28",
-      "THT",
-      "THT Axial",
-      "TO-220F",
-      "TO-220F2",
-      "TO-252 (DPAK)",
-      "TO-263 (D2PAK)",
-      "TSSOP-14",
-      "TSSOP-8",
-      "VSSOP-8"
-    ]
-  },
   "session": {
-    "currentUserId": "user-Da467Rpq41UHYpNoS7y8EAR5tf13",
     "activeTableId": "t-main",
     "openTableIds": [
       "t-main"
-    ]
+    ],
+    "operatorName": ""
   },
   "settings": {
     "theme": "light",

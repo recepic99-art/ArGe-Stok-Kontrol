@@ -1,46 +1,69 @@
 # Ar-Ge Numune Depo
 
-GitHub Pages üzerinde çalışan ve ortak veriyi Firebase Realtime Database'de
-saklayan stok takip uygulamasıdır.
+GitHub Pages üzerinde çalışan, ortak veriyi Firebase Realtime Database'de
+saklayan esnek liste ve stok takip uygulamasıdır.
 
-## Firebase düzeni
+## Erişim düzeni
 
-- Kullanıcı hesapları Firebase Authentication tarafından yönetilir.
-- Stok listeleri, hareketler, kategori/kılıf tanımları ve kullanıcı profilleri
-  Realtime Database'de ortaktır.
-- Kullanıcı profilleri `appState/userDirectory` altında tutulur.
-- Yetkilerin tek kaynağı `appState/rolesByUid` düğümüdür.
-- İlk kullanıcı yönetici, sonraki kullanıcılar üye olarak oluşturulur.
-- Yönetici Kullanıcılar panelinden kullanıcı rollerini değiştirebilir.
-- Üyeler mevcut malzemelerden yalnızca çıkış yapabilir.
-- Kategori ve kılıf tanımlarını yalnızca yöneticiler düzenleyebilir.
+- Uygulama açılırken kullanıcıdan hesap veya parola istemez. Firebase
+  Authentication arka planda anonim bir oturum açar.
+- Günlük işlemlerde hareket kaydına yazılacak ad, tarayıcıda yerel olarak tutulur.
+- Liste, kart ve sütun düzenleme gibi yönetici işlemlerinde yönetici parolası
+  istenir.
+- Doğru parola girildiğinde yönetici modu 15 dakika açık kalır. Her yönetici
+  işlemi süreyi yeniden başlatır.
+- Yönetici modu kapatıldığında uygulama tekrar anonim Firebase oturumuna döner.
+- Yönetici parolası kaynak kodunda veya Realtime Database'de tutulmaz; Firebase
+  Authentication hesabı tarafından doğrulanır.
 
-## Güvenlik
+Yönetici e-posta adresi ve süre `assets/js/firebase-config.js` içindeki
+`DepoAccessConfig` nesnesinden değiştirilebilir. Parola bu dosyaya yazılmaz.
 
-`firebase-database-rules.json` kuralları şu ayrımı uygular:
+## Firebase kurulumu
 
-- Oturum açmış kullanıcılar stok ve hareket verilerini kullanabilir.
-- Kategori ve kılıf tanımlarını yalnızca yöneticiler yazabilir.
-- Her kullanıcı yalnızca kendi profilini yazabilir.
-- Kullanıcı rollerini yalnızca yönetici değiştirebilir.
-- Eski bir tarayıcı oturumu kullanıcı dizininin tamamını ezemez.
+Firebase Console > Authentication > Sign-in method bölümünde iki sağlayıcı açık
+olmalıdır:
+
+1. Anonymous
+2. Email/Password
+
+`DepoAccessConfig.administratorEmail` ile aynı e-posta adresine sahip tek bir
+Firebase Authentication hesabı yönetici hesabıdır. Realtime Database Rules
+bölümüne `firebase-database-rules.json` içeriği uygulanmalıdır.
+
+## Esnek listeler
+
+- Her liste kendi sütun düzenini taşır; bir listedeki değişiklik diğer listeleri
+  etkilemez.
+- Yönetici `Düzen > Tanımlamalar` bölümünden sütun ekleyebilir, yeniden
+  adlandırabilir veya silebilir.
+- Sütun tipi metin, uzun metin, sayı, tarih, checkbox ya da combobox olabilir.
+- Combobox seçenekleri aynı ekranda tanımlanır. Kategori ve kılıf da normal
+  combobox sütunlarıdır; ayrı katalog tutulmaz.
+- Sütun şeması, kayıtlar ve hareket geçmişi Firebase'de ortaktır.
+
+## Güvenlik sınırı
+
+Bu sürüm yedi kişilik şirket içi kullanım için sade tutulmuştur. Yönetici kapısı
+normal kullanıcıların arayüzden tanım ve kart değiştirmesini engeller. Mevcut
+Firebase veri yapısında listeler dizi halinde saklandığı için teknik bilgisi olan
+bir kişi doğrudan Firebase API çağrısıyla arayüz kapısını aşabilir. Tam sunucu
+taraflı yetkilendirme gerekirse verinin kayıt bazında ayrılması veya PHP/Cloud
+Function gibi bir API katmanı eklenmesi gerekir.
+
+Kurallardaki `users`, `userDirectory` ve `rolesByUid` yazma yasakları yalnız eski
+sürümlerin bıraktığı alanların tekrar değiştirilmesini önler; uygulama bu alanları
+okumaz veya üyelik amacıyla kullanmaz.
 
 ## GitHub Pages güncellemesi
 
-1. Bu klasördeki `index.html`, `firebase-store-v4.js`,
-   `firebase-database-rules.json` ve `assets` klasörünü GitHub deposundaki aynı
-   yolların üzerine yükleyin.
-2. Değişiklikleri doğrudan `main` dalına kaydedin.
-3. Firebase Realtime Database kurallarını `firebase-database-rules.json`
-   içeriğiyle güncelleyin. Bu adım yapılmazsa kategori tanımları kaydedilemez.
-4. Uygulamada yönetici hesabıyla `Dosya > JSON içe aktar` yolunu kullanıp
-   `arge-numune-depo-yedek-2026-08-11-kategoriler-duzenlenmis.json` dosyasını
-   bir kez aktarın.
-5. GitHub Pages yayımlaması tamamlandıktan sonra sayfayı `Ctrl+F5` ile yenileyin.
-
-`index.html` içindeki dosya sürüm etiketleri tarayıcı önbelleğini yeniler.
+1. `index.html`, `firebase-store-v4.js`, `firebase-database-rules.json` ve
+   `assets` klasörünü GitHub deposundaki aynı yolların üzerine yükleyin.
+2. Değişiklikleri `main` dalına kaydedin.
+3. Firebase kurallarını güncel dosyayla eşitleyin.
+4. GitHub Pages yayımlandıktan sonra uygulama sayfasını bir kez zorla yenileyin.
 
 ## Yerel çalışma
 
-`Web_Demoyu_Baslat.cmd` dosyasını çalıştırın veya bu klasörde bir HTTP sunucusu
+`Web_Demoyu_Baslat.cmd` dosyasını çalıştırın veya klasörde bir HTTP sunucusu
 başlatın. Uygulama doğrudan `file://` adresinden açılmamalıdır.
