@@ -42,6 +42,16 @@ bölümüne `firebase-database-rules.json` içeriği uygulanmalıdır.
   combobox sütunlarıdır; ayrı katalog tutulmaz.
 - Sütun şeması, kayıtlar ve hareket geçmişi Firebase'de ortaktır.
 
+## Sütunlu arama
+
+- Normal metin bütün sütunlarda aranır: `PTC`.
+- `//` önceki değeri belirtilen sütunla sınırlar: `PTC//Malzeme Adı`.
+- `;;` birden fazla koşulu ayırır:
+  `PTC//Malzeme Adı ;; YENİ3//Kutu`.
+- Tırnak içindeki `//` ve `;;` işaretleri normal arama metnidir.
+- Kullanıcı `//` yazdığında yalnız aktif listenin güncel sütunları önerilir;
+  gizlenmiş fakat silinmemiş sütunlar da aranabilir.
+
 ## Güvenlik sınırı
 
 Bu sürüm yedi kişilik şirket içi kullanım için sade tutulmuştur. Yönetici kapısı
@@ -72,5 +82,5 @@ tarafından alınan yedek içindir.
 
 ## Yerel çalışma
 
-`Web_Demoyu_Baslat.cmd` dosyasını çalıştırın veya klasörde bir HTTP sunucusu
-başlatın. Uygulama doğrudan `file://` adresinden açılmamalıdır.
+Klasörde bir HTTP sunucusu başlatın. Uygulama doğrudan `file://` adresinden
+açılmamalıdır.

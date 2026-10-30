@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title>Ar-Ge Numune Depo - Web Demo</title>
   <link rel="stylesheet" href="assets/vendor/dockview/dockview.css?v=7.0.3">
-  <link rel="stylesheet" href="assets/css/app.css?v=operator-role-1">
+  <link rel="stylesheet" href="assets/css/app.css?v=column-search-1">
 </head>
 <body>
   <div id="app" class="app-shell" aria-hidden="true">
@@ -107,10 +107,15 @@
             <h2>Listeler</h2>
             <p id="stock-count" class="muted">0 malzeme / 0 seçili</p>
           </div>
-          <label class="search-field">
+          <div class="search-field">
             <span class="search-icon" aria-hidden="true"></span>
-            <input id="stock-search" type="search" placeholder="Malzeme adı, ID, kategori, açıklama ara">
-          </label>
+            <input id="stock-search" type="search" autocomplete="off"
+              aria-label="Listede ara" aria-autocomplete="list"
+              aria-controls="stock-search-suggestions" aria-expanded="false"
+              placeholder="Malzeme adı, ID, kategori, açıklama ara">
+            <div id="stock-search-suggestions" class="search-suggestions"
+              role="listbox" aria-label="Sütun önerileri" hidden></div>
+          </div>
           <label class="check-label"><input id="critical-only" type="checkbox"> Kritik altı</label>
         </div>
         <div id="open-table-tabs" class="open-table-tabs"></div>
@@ -366,6 +371,7 @@
 
   <script src="assets/js/catalog.js?v=anonymous-access-2"></script>
   <script src="assets/js/data.js?v=anonymous-access-2"></script>
+  <script src="assets/js/search-query.js?v=1"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
@@ -374,6 +380,6 @@
   <script src="assets/vendor/dockview/dockview.min.js?v=7.0.3"></script>
   <script src="assets/js/dock-layout.js?v=7"></script>
   <script src="assets/js/combobox.js?v=2"></script>
-  <script src="assets/js/app.js?v=performance-1"></script>
+  <script src="assets/js/app.js?v=column-search-1"></script>
 </body>
 </html>

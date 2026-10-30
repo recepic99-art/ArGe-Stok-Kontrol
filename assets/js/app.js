@@ -22,6 +22,9 @@
     suppressColumnClick: false,
     definitionTableId: "",
     definitionColumnKey: "",
+    searchSuggestionContext: null,
+    searchSuggestionOptions: [],
+    searchSuggestionIndex: 0,
     administratorFailures: 0,
     administratorLockedUntil: 0,
     accessModeChanging: false
@@ -754,14 +757,22 @@
       escapeHtml(text) + "</td>";
   }
 
-  function fuzzyMatch(query, item) {
+  function directMatchFields(query, rawFields) {
     if (!query) return true;
     const normalizedQuery = normalizeText(query);
-    const rawFields = Object.keys(item).map(function (key) {
-      return String(item[key] == null ? "" : item[key]);
+    if (!normalizedQuery) return rawFields.some(function (field) {
+      return String(field || "").includes(String(query || ""));
+    });
+    rawFields = rawFields.map(function (field) {
+      return String(field == null ? "" : field);
     });
     const fields = rawFields.map(normalizeText);
-    if (fields.some(function (field) { return field.includes(normalizedQuery); })) return true;
+    return fields.some(function (field) { return field.includes(normalizedQuery); });
+  }
+
+  function fuzzyMatchFields(query, rawFields) {
+    if (directMatchFields(query, rawFields)) return true;
+    const normalizedQuery = normalizeText(query);
 
     if (normalizedQuery.length < 3) return false;
 
@@ -786,6 +797,27 @@
         const lengthRatio = Math.min(candidate.length, normalizedQuery.length) /
           Math.max(candidate.length, normalizedQuery.length);
         return lengthRatio >= 0.6 && similarity(normalizedQuery, candidate) >= 0.76;
+      });
+    });
+  }
+
+  function itemMatchesSearch(query, item, columns, allowFuzzy) {
+    if (!query) return true;
+    const parser = window.DepoSearchQuery;
+    const clauses = parser ? parser.parse(query, columns) : [{ terms: [query], columnKey: null }];
+    if (!clauses.length) return true;
+
+    return clauses.every(function (clause) {
+      const searchableColumns = clause.columnKey
+        ? columns.filter(function (column) { return column.key === clause.columnKey; })
+        : columns;
+      const fields = searchableColumns.map(function (column) {
+        return tableCellText(column, item[column.key]);
+      });
+      return clause.terms.every(function (term) {
+        return allowFuzzy
+          ? fuzzyMatchFields(term, fields)
+          : directMatchFields(term, fields);
       });
     });
   }
@@ -831,10 +863,20 @@
       tableHasNumberColumn(active.table, "quantity") &&
       tableHasNumberColumn(active.table, "critical");
     const criticalOnly = supportsCriticalStock && $("critical-only").checked;
-    const items = active.table.items.filter(function (item) {
+    const stockFilteredItems = active.table.items.filter(function (item) {
       const isCritical = supportsCriticalStock && Number(item.quantity) <= Number(item.critical);
-      return (!criticalOnly || isCritical) && fuzzyMatch(query, item);
+      return !criticalOnly || isCritical;
     });
+    // Önce gerçek içerik eşleşmeleri kullanılır. Böylece YENİ3 araması YENİ1'i
+    // benzer diye getirmez. Yalnız hiç sonuç yoksa yazım hatası toleransı açılır.
+    const directItems = stockFilteredItems.filter(function (item) {
+      return itemMatchesSearch(query, item, activeColumns, false);
+    });
+    const items = query && !directItems.length
+      ? stockFilteredItems.filter(function (item) {
+        return itemMatchesSearch(query, item, activeColumns, true);
+      })
+      : directItems;
     const direction = ui.sortDirection === "asc" ? 1 : -1;
     const sortColumn = activeColumns.find(function (column) { return column.key === ui.sortKey; }) || {};
     return items.slice().sort(function (left, right) {
@@ -856,6 +898,68 @@
         sensitivity: "base"
       }) * direction;
     });
+  }
+
+  function closeStockSearchSuggestions() {
+    ui.searchSuggestionContext = null;
+    ui.searchSuggestionOptions = [];
+    ui.searchSuggestionIndex = 0;
+    $("stock-search-suggestions").hidden = true;
+    $("stock-search-suggestions").innerHTML = "";
+    $("stock-search").setAttribute("aria-expanded", "false");
+  }
+
+  function renderStockSearchSuggestions() {
+    const parser = window.DepoSearchQuery;
+    const active = activeTableReference();
+    const input = $("stock-search");
+    if (!parser || !active || document.activeElement !== input) {
+      closeStockSearchSuggestions();
+      return;
+    }
+
+    // Öneriler sabit bir katalogdan değil, yalnızca o anda açık olan tablonun
+    // güncel sütun şemasından üretilir. Gizli sütunlar da aranabilir durumdadır.
+    const columns = ensureTableColumns(active.table);
+    const context = parser.suggestionContext(
+      input.value,
+      input.selectionStart == null ? input.value.length : input.selectionStart,
+      columns
+    );
+    if (!context || !context.options.length) {
+      closeStockSearchSuggestions();
+      return;
+    }
+
+    ui.searchSuggestionContext = context;
+    ui.searchSuggestionOptions = context.options;
+    ui.searchSuggestionIndex = Math.min(
+      Math.max(ui.searchSuggestionIndex, 0),
+      context.options.length - 1
+    );
+    $("stock-search-suggestions").innerHTML = context.options.map(function (column, index) {
+      return '<button type="button" role="option" class="search-suggestion' +
+        (index === ui.searchSuggestionIndex ? " is-active" : "") +
+        '" data-search-suggestion="' + index + '" aria-selected="' +
+        (index === ui.searchSuggestionIndex ? "true" : "false") + '">' +
+        '<span>' + escapeHtml(column.label) + '</span>' +
+        (column.visible === false ? '<small>Gizli</small>' : '') + '</button>';
+    }).join("");
+    $("stock-search-suggestions").hidden = false;
+    input.setAttribute("aria-expanded", "true");
+  }
+
+  function selectStockSearchSuggestion(index) {
+    const parser = window.DepoSearchQuery;
+    const input = $("stock-search");
+    const column = ui.searchSuggestionOptions[index];
+    if (!parser || !ui.searchSuggestionContext || !column) return;
+    input.value = parser.applySuggestion(input.value, ui.searchSuggestionContext, column.label);
+    const caret = ui.searchSuggestionContext.replacementStart + column.label.length;
+    closeStockSearchSuggestions();
+    input.focus();
+    input.setSelectionRange(caret, caret);
+    renderStockTable();
   }
 
   function stockClass(item, supportsCriticalStock) {
@@ -2518,11 +2622,48 @@
     ui.activeItemId = null;
     ui.checkedIds.clear();
     ui.formItemId = null;
+    closeStockSearchSuggestions();
     saveLocalState();
     renderAll(true);
   });
 
-  $("stock-search").addEventListener("input", renderStockSearch);
+  $("stock-search").addEventListener("input", function () {
+    ui.searchSuggestionIndex = 0;
+    renderStockSearchSuggestions();
+    renderStockSearch();
+  });
+  $("stock-search").addEventListener("click", renderStockSearchSuggestions);
+  $("stock-search").addEventListener("keydown", function (event) {
+    if ($("stock-search-suggestions").hidden) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      ui.searchSuggestionIndex = (
+        ui.searchSuggestionIndex + direction + ui.searchSuggestionOptions.length
+      ) % ui.searchSuggestionOptions.length;
+      renderStockSearchSuggestions();
+      const active = $("stock-search-suggestions").querySelector(".is-active");
+      if (active) active.scrollIntoView({ block: "nearest" });
+    } else if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      selectStockSearchSuggestion(ui.searchSuggestionIndex);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeStockSearchSuggestions();
+    }
+  });
+  $("stock-search").addEventListener("blur", function () {
+    window.setTimeout(function () {
+      if (!$("stock-search-suggestions").matches(":hover")) closeStockSearchSuggestions();
+    }, 120);
+  });
+  $("stock-search-suggestions").addEventListener("mousedown", function (event) {
+    event.preventDefault();
+  });
+  $("stock-search-suggestions").addEventListener("click", function (event) {
+    const option = event.target.closest("[data-search-suggestion]");
+    if (option) selectStockSearchSuggestion(Number(option.dataset.searchSuggestion));
+  });
   $("critical-only").addEventListener("change", renderStockTable);
   $("stock-table-head").addEventListener("click", function (event) {
     if (ui.suppressColumnClick || event.target.closest(".column-resizer")) return;
