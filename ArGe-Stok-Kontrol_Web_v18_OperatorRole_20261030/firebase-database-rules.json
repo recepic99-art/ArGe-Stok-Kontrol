@@ -1,0 +1,26 @@
+{
+  "rules": {
+    "appState": {
+      ".read": "auth != null",
+      "schemaVersion": {
+        ".write": "auth != null",
+        ".validate": "newData.isNumber()"
+      },
+      "tables": {
+        ".write": "auth != null"
+      },
+      "logs": {
+        ".write": "auth != null"
+      },
+      "userDirectory": {
+        ".write": false
+      },
+      "rolesByUid": {
+        ".write": false
+      },
+      "users": {
+        ".write": false
+      }
+    }
+  }
+}
