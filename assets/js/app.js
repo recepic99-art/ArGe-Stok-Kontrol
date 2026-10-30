@@ -123,6 +123,28 @@
     }
   }
 
+  function saveLocalState() {
+    const saveLocal = window.DepoStore.saveLocalUi || window.DepoStore.save;
+    if (!saveLocal.call(window.DepoStore, state)) {
+      showToast("Yerel görünüm ayarları kaydedilemedi.", true);
+    }
+  }
+
+  function debounce(callback, delay) {
+    let timer = 0;
+    return function () {
+      const args = arguments;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(function () {
+        callback.apply(null, args);
+      }, delay);
+    };
+  }
+
+  const saveLocalStateAfterTyping = debounce(saveLocalState, 180);
+  const renderStockSearch = debounce(function () { renderStockTable(); }, 120);
+  const renderHistorySearch = debounce(function () { renderHistory(); }, 120);
+
   function showToast(message, isError) {
     const toast = document.createElement("div");
     toast.className = "toast" + (isError ? " is-error" : "");
@@ -455,26 +477,6 @@
     });
   }
 
-  function editOperatorName() {
-    openFormModal({
-      title: "İşlem adını değiştir",
-      message: "Bu ad hareket geçmişindeki Alan/Veren ve Kontrol Eden alanlarında görünür.",
-      fields: [
-        { name: "name", label: "Ad Soyad", value: currentOperatorName(), required: true }
-      ],
-      submitLabel: "Kaydet",
-      onSubmit: function (values) {
-        const name = String(values.name || "").trim();
-        if (!name) throw new Error("Ad soyad alanı zorunludur.");
-        state.session.operatorName = name;
-        saveState();
-        renderAll(false);
-        showToast("İşlem adı güncellendi.");
-        return true;
-      }
-    });
-  }
-
   function openAdministratorPrompt(resume) {
     const remainingLock = Math.ceil((ui.administratorLockedUntil - Date.now()) / 1000);
     if (remainingLock > 0) {
@@ -593,8 +595,9 @@
     const fileName = window.DepoStore.fileName() || "JSON bağlı değil";
     const context = fileName + (active ? " / " + active.table.name : "");
     $("header-context").textContent = context;
-    $("current-user-button").textContent = currentOperatorName() +
-      (isAdministrator ? " · Yönetici" : "");
+    const accessLabel = isAdministrator ? "Yönetici" : "Kullanıcı";
+    $("current-user-button").textContent = accessLabel;
+    $("current-user-button").title = "Yetki seviyesi: " + accessLabel;
     $("enter-admin-menu").hidden = isAdministrator;
     $("exit-admin-menu").hidden = !isAdministrator;
     updateFileStatus();
@@ -650,7 +653,7 @@
     ui.checkedIds.clear();
     ui.formMode = "existing";
     ui.formItemId = null;
-    saveState();
+    saveLocalState();
     renderAll(true);
   }
 
@@ -665,7 +668,7 @@
     ui.activeItemId = null;
     ui.checkedIds.clear();
     ui.formItemId = null;
-    saveState();
+    saveLocalState();
     renderAll(true);
   }
 
@@ -738,35 +741,52 @@
     return String(value == null ? "" : value);
   }
 
-  function tableCellHtml(column, value) {
+  function tableCellHtml(column, value, widthStyle) {
     if (column.fieldType === "checkbox") {
       return '<td class="checkbox-cell" data-stock-column="' + escapeHtml(column.key) +
-        '" style="' + columnWidthStyle("stock", column.key) + '" title="' +
+        '" style="' + widthStyle + '" title="' +
         (checkboxValue(value) ? "Evet" : "Hayır") + '"><input type="checkbox" disabled' +
         (checkboxValue(value) ? " checked" : "") + "></td>";
     }
     const text = tableCellText(column, value);
     return '<td data-stock-column="' + escapeHtml(column.key) + '" style="' +
-      columnWidthStyle("stock", column.key) + '" title="' + escapeHtml(text) + '">' +
+      widthStyle + '" title="' + escapeHtml(text) + '">' +
       escapeHtml(text) + "</td>";
   }
 
   function fuzzyMatch(query, item) {
     if (!query) return true;
     const normalizedQuery = normalizeText(query);
-    const fields = Object.keys(item).map(function (key) {
-      return normalizeText(item[key]);
+    const rawFields = Object.keys(item).map(function (key) {
+      return String(item[key] == null ? "" : item[key]);
     });
+    const fields = rawFields.map(normalizeText);
     if (fields.some(function (field) { return field.includes(normalizedQuery); })) return true;
 
-    // Ufak yazım hatalarında, sorgu ile alanın ortak karakter oranına bakılır.
-    return fields.some(function (field) {
-      if (!field || normalizedQuery.length < 3) return false;
-      const windowLength = Math.min(field.length, normalizedQuery.length + 2);
-      for (let index = 0; index <= field.length - windowLength; index += 1) {
-        if (similarity(normalizedQuery, field.slice(index, index + windowLength)) >= 0.74) return true;
+    if (normalizedQuery.length < 3) return false;
+
+    // Açıklama gibi uzun alanlarda her karakter konumunda Levenshtein çalıştırmak
+    // tabloyu kilitliyordu. Kelime ve yan yana kelime grupları aynı yazım hatası
+    // toleransını çok daha az hesapla sağlar.
+    return rawFields.some(function (field) {
+      const words = field
+        .toLocaleLowerCase("tr-TR")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/ı/g, "i")
+        .split(/[^a-z0-9]+/)
+        .filter(Boolean);
+      const candidates = words.slice();
+      for (let size = 2; size <= Math.min(3, words.length); size += 1) {
+        for (let index = 0; index <= words.length - size; index += 1) {
+          candidates.push(words.slice(index, index + size).join(""));
+        }
       }
-      return similarity(normalizedQuery, field) >= 0.76;
+      return candidates.some(function (candidate) {
+        const lengthRatio = Math.min(candidate.length, normalizedQuery.length) /
+          Math.max(candidate.length, normalizedQuery.length);
+        return lengthRatio >= 0.6 && similarity(normalizedQuery, candidate) >= 0.76;
+      });
     });
   }
 
@@ -838,13 +858,8 @@
     });
   }
 
-  function stockClass(item) {
-    if (!stockLikeActiveTable()) return "";
-    const active = activeTableReference();
-    if (!active || !tableHasNumberColumn(active.table, "quantity") ||
-        !tableHasNumberColumn(active.table, "critical")) {
-      return "";
-    }
+  function stockClass(item, supportsCriticalStock) {
+    if (!supportsCriticalStock) return "";
     const quantity = Number(item.quantity) || 0;
     const critical = Number(item.critical) || 0;
     if (quantity <= critical) return " stock-critical";
@@ -862,6 +877,9 @@
     }
 
     const columns = orderedVisibleColumns();
+    const widthStyles = Object.fromEntries(columns.map(function (column) {
+      return [column.key, columnWidthStyle("stock", column.key)];
+    }));
     const visibleItems = filteredSortedItems();
     const activeKind = activeTableKind();
     const allVisibleChecked = visibleItems.length > 0 && visibleItems.every(function (item) {
@@ -885,7 +903,7 @@
           : "";
         return '<th draggable="true" data-key="' + escapeHtml(column.key) +
           '" data-stock-column="' + escapeHtml(column.key) + '" style="' +
-          columnWidthStyle("stock", column.key) + '">' +
+          widthStyles[column.key] + '">' +
           escapeHtml(column.label) + indicator +
           '<span class="column-resizer" data-resize-stock="' +
           escapeHtml(column.key) + '"></span></th>';
@@ -895,11 +913,12 @@
     $("stock-table-body").innerHTML = visibleItems.map(function (item) {
       const selected = ui.activeItemId === item.id || ui.checkedIds.has(item.id);
       return '<tr data-item-id="' + escapeHtml(item.id) + '"' +
-        ' class="' + (selected ? "is-selected" : "") + stockClass(item) + '">' +
+        ' class="' + (selected ? "is-selected" : "") +
+        stockClass(item, supportsCriticalStock) + '">' +
         '<td class="select-cell" data-checkbox-item="' + escapeHtml(item.id) + '">' +
         '<input type="checkbox"' + (ui.checkedIds.has(item.id) ? " checked" : "") + '></td>' +
         columns.map(function (column) {
-          return tableCellHtml(column, item[column.key]);
+          return tableCellHtml(column, item[column.key], widthStyles[column.key]);
         }).join("") + "</tr>";
     }).join("");
 
@@ -1554,7 +1573,11 @@
       entryOption.hidden = false;
       entryOption.disabled = false;
     }
-    $("movement-user").textContent = currentOperatorName();
+    // Alan/Veren adı kullanıcıya özeldir. Firebase'deki ortak stok verisine değil,
+    // bu tarayıcının yerel ayarlarına kaydedilir.
+    if (document.activeElement !== $("movement-user")) {
+      $("movement-user").value = currentOperatorName();
+    }
     $("movement-selection").textContent = targets.length
       ? (targets.length === 1 ? itemDisplayName(targets[0]) : targets.length + " malzeme seçili")
       : (stockMode ? "Seçim yok" : "Bu liste stok hareketi kullanmaz");
@@ -1564,8 +1587,36 @@
     $("movement-purpose").hidden = !isExit;
   }
 
+  function saveMovementUser(showMessage) {
+    const input = $("movement-user");
+    const name = String(input.value || "").trim();
+    if (!name) {
+      input.value = currentOperatorName();
+      if (showMessage !== false) showToast("Alan/Veren adı boş bırakılamaz.", true);
+      return false;
+    }
+    input.value = name;
+    const changed = name !== currentOperatorName();
+    if (changed) state.session.operatorName = name;
+    saveLocalState();
+    if (changed && showMessage !== false) showToast("Alan/Veren adı güncellendi.");
+    return true;
+  }
+
+  function saveMovementUserWhileTyping() {
+    const name = String($("movement-user").value || "").trim();
+    if (!name || name === currentOperatorName()) return;
+    state.session.operatorName = name;
+    saveLocalStateAfterTyping();
+  }
+
   function processMovement(event) {
     event.preventDefault();
+    if (!saveMovementUser(false)) {
+      $("movement-user").focus();
+      showToast("Hareketi işlemeden önce Alan/Veren adını yazın.", true);
+      return;
+    }
     const active = activeTableReference();
     const targets = movementTargetItems();
     const quantity = integerValue($("movement-quantity"), NaN);
@@ -1713,19 +1764,22 @@
 
   function renderHistory() {
     const rows = historyRows();
+    const widthStyles = Object.fromEntries(Object.keys(defaultHistoryColumnWidths).map(function (key) {
+      return [key, columnWidthStyle("history", key)];
+    }));
     const scopeText = $("history-scope").selectedOptions[0]
       ? $("history-scope").selectedOptions[0].textContent
       : "Aktif tablo";
     $("history-context").textContent = scopeText + " / " + rows.length + " hareket";
     document.querySelectorAll("[data-history-column]").forEach(function (cell) {
       const key = cell.dataset.historyColumn;
-      cell.style.cssText = columnWidthStyle("history", key);
+      cell.style.cssText = widthStyles[key];
     });
     $("history-table-body").innerHTML = rows.map(function (log) {
       const itemName = historyItemName(log);
       function cell(key, value) {
         return '<td data-history-column="' + key + '" style="' +
-          columnWidthStyle("history", key) + '" title="' + escapeHtml(value) + '">' +
+          widthStyles[key] + '" title="' + escapeHtml(value) + '">' +
           escapeHtml(value) + "</td>";
       }
       return "<tr>" +
@@ -1949,7 +2003,7 @@
             const operatorName = currentOperatorName();
             state = await window.DepoStore.replace(imported);
             state.session.operatorName = operatorName;
-            saveState();
+            saveLocalState();
             ui.activeItemId = null;
             ui.checkedIds.clear();
             ui.formItemId = null;
@@ -2240,7 +2294,8 @@
       document.body.classList.remove("is-resizing-column");
       document.removeEventListener("pointermove", move);
       document.removeEventListener("pointerup", stop);
-      saveState();
+      if (group === "history") saveLocalState();
+      else saveState();
       window.setTimeout(function () {
         ui.suppressColumnClick = false;
       }, 0);
@@ -2279,7 +2334,7 @@
       splitter.classList.remove("is-dragging");
       document.removeEventListener("pointermove", move);
       document.removeEventListener("pointerup", stop);
-      saveState();
+      saveLocalState();
     }
 
     document.addEventListener("pointermove", move);
@@ -2310,7 +2365,6 @@
       "export-json": exportJson,
       "export-csv": exportActiveTableCsv,
       "open-bom": openBom,
-      "edit-operator": editOperatorName,
       "enter-admin": function () { openAdministratorPrompt(); },
       "exit-admin": function () { exitAdministratorMode(true); },
       "new-card": startNewCard,
@@ -2336,12 +2390,12 @@
       },
       "theme-light": function () {
         state.settings.theme = "light";
-        saveState();
+        saveLocalState();
         applySettings();
       },
       "theme-dark": function () {
         state.settings.theme = "dark";
-        saveState();
+        saveLocalState();
         applySettings();
       },
       "show-columns": function () {
@@ -2361,7 +2415,7 @@
         state.settings.historyHeight = 38;
         state.settings.leftCollapsed = false;
         state.settings.rightCollapsed = false;
-        saveState();
+        saveLocalState();
         applySettings();
         if (window.DepoDock) window.DepoDock.reset();
       },
@@ -2464,11 +2518,11 @@
     ui.activeItemId = null;
     ui.checkedIds.clear();
     ui.formItemId = null;
-    saveState();
+    saveLocalState();
     renderAll(true);
   });
 
-  $("stock-search").addEventListener("input", renderStockTable);
+  $("stock-search").addEventListener("input", renderStockSearch);
   $("critical-only").addEventListener("change", renderStockTable);
   $("stock-table-head").addEventListener("click", function (event) {
     if (ui.suppressColumnClick || event.target.closest(".column-resizer")) return;
@@ -2554,8 +2608,12 @@
   $("stock-card-panel").addEventListener("submit", saveStockCard);
   $("movement-panel").addEventListener("submit", processMovement);
   $("movement-type").addEventListener("change", syncMovementForm);
+  $("movement-user").addEventListener("input", saveMovementUserWhileTyping);
+  $("movement-user").addEventListener("change", function () {
+    saveMovementUser(true);
+  });
   $("history-scope").addEventListener("change", renderHistory);
-  $("history-search").addEventListener("input", renderHistory);
+  $("history-search").addEventListener("input", renderHistorySearch);
   $("stock-table-head").addEventListener("pointerdown", function (event) {
     const handle = event.target.closest("[data-resize-stock]");
     if (handle) startColumnResize("stock", handle.dataset.resizeStock, event);
@@ -2649,12 +2707,12 @@
   $("history-splitter").addEventListener("pointerdown", function (event) { startResize("history", event); });
   $("collapse-left").addEventListener("click", function () {
     state.settings.leftCollapsed = !state.settings.leftCollapsed;
-    saveState();
+    saveLocalState();
     applySettings();
   });
   $("collapse-right").addEventListener("click", function () {
     state.settings.rightCollapsed = !state.settings.rightCollapsed;
-    saveState();
+    saveLocalState();
     applySettings();
   });
 
@@ -2667,7 +2725,7 @@
     if (!$("definitions-modal").hidden) closeDefinitions();
   });
   window.addEventListener("beforeunload", function () {
-    if (window.DepoStore.hasFile()) saveState();
+    if (window.DepoStore.hasFile()) saveLocalState();
   });
   window.addEventListener("depo-file-error", function (event) {
     showToast(event.detail || "Firebase ortak verisine yazılamadı.", true);

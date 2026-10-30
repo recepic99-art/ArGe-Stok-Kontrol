@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title>Ar-Ge Numune Depo - Web Demo</title>
   <link rel="stylesheet" href="assets/vendor/dockview/dockview.css?v=7.0.3">
-  <link rel="stylesheet" href="assets/css/app.css?v=anonymous-access-2">
+  <link rel="stylesheet" href="assets/css/app.css?v=operator-role-1">
 </head>
 <body>
   <div id="app" class="app-shell" aria-hidden="true">
@@ -65,10 +65,8 @@
         <button id="json-file-button" class="button button-muted" title="JSON veri dosyası"></button>
         <div class="menu-group account-menu-group">
           <button id="current-user-button" class="button button-muted menu-trigger"
-                  data-menu="user-menu" title="Kullanım ve yönetici modu"></button>
+                  data-menu="user-menu" title="Yetki seviyesi ve yönetici modu"></button>
           <div id="user-menu" class="menu-popover account-menu" hidden>
-            <button data-action="edit-operator">İşlem adını değiştir</button>
-            <div class="menu-separator"></div>
             <button id="enter-admin-menu" data-action="enter-admin">Yönetici moduna geç</button>
             <button id="exit-admin-menu" class="context-danger" data-action="exit-admin" hidden>Yönetici modundan çık</button>
           </div>
@@ -162,8 +160,8 @@
               <input id="movement-quantity" class="control" type="number" value="1" min="1" step="1" inputmode="numeric">
               <label id="movement-purpose-label" for="movement-purpose">Kullanım amacı/proje</label>
               <input id="movement-purpose" class="control" autocomplete="off">
-              <span>Alan/Veren</span>
-              <strong id="movement-user"></strong>
+              <label for="movement-user">Alan/Veren</label>
+              <input id="movement-user" class="control" autocomplete="name" placeholder="Ad Soyad">
               <label for="movement-note">Açıklama</label>
               <input id="movement-note" class="control" autocomplete="off">
             </div>
@@ -366,17 +364,16 @@
   <input id="json-file-input" type="file" accept=".json,application/json" hidden>
   <input id="bom-file-input" type="file" accept=".csv,.txt,text/csv,text/plain" hidden>
 
-  <script src="assets/js/seed.js?v=anonymous-access-2"></script>
   <script src="assets/js/catalog.js?v=anonymous-access-2"></script>
   <script src="assets/js/data.js?v=anonymous-access-2"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
   <script src="assets/js/firebase-config.js?v=anonymous-access-2"></script>
-  <script src="firebase-store-v4.js?v=25"></script>
+  <script src="firebase-store-v4.js?v=26"></script>
   <script src="assets/vendor/dockview/dockview.min.js?v=7.0.3"></script>
   <script src="assets/js/dock-layout.js?v=7"></script>
   <script src="assets/js/combobox.js?v=2"></script>
-  <script src="assets/js/app.js?v=anonymous-access-2"></script>
+  <script src="assets/js/app.js?v=performance-1"></script>
 </body>
 </html>

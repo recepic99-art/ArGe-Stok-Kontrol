@@ -55,6 +55,13 @@ Kurallardaki `users`, `userDirectory` ve `rolesByUid` yazma yasakları yalnız e
 sürümlerin bıraktığı alanların tekrar değiştirilmesini önler; uygulama bu alanları
 okumaz veya üyelik amacıyla kullanmaz.
 
+## Veri kaynağı
+
+GitHub Pages yalnız uygulama dosyalarını yayınlar. Canlı listeler, stok miktarları
+ve hareket geçmişi Firebase Realtime Database içinde tutulur; depoda ayrıca stok
+JSON'u veya başlangıç verisi bulundurulmaz. JSON dışa aktarma yalnız kullanıcı
+tarafından alınan yedek içindir.
+
 ## GitHub Pages güncellemesi
 
 1. `index.html`, `firebase-store-v4.js`, `firebase-database-rules.json` ve

@@ -630,6 +630,14 @@
     return true;
   }
 
+  // Sekme, tema, panel boyutu ve Alan/Veren gibi kullanıcıya özel bilgiler
+  // yalnızca bu tarayıcıda tutulur. Bunlar değiştiğinde yüzlerce stok kaydını
+  // yeniden karşılaştırıp Firebase'e bakmaya gerek yoktur.
+  function saveLocalUi(state) {
+    writeLocalUi(state);
+    return true;
+  }
+
   async function replace(imported) {
     const normalized = normalizeState(imported);
     writeLocalUi(normalized);
@@ -665,6 +673,7 @@
     watch: watch,
     replace: replace,
     save: save,
+    saveLocalUi: saveLocalUi,
     flush: function () { return writeQueue; },
     hasFile: function () { return true; },
     fileName: function () { return "Firebase ortak veri"; },
